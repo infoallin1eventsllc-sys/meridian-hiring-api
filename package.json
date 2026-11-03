@@ -1,0 +1,44 @@
+{
+  "name": "meridian-hiring-api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Meridian Hire: a multi-company hiring pipeline API (applicant tracking) with row-level security, signed webhooks, rate limiting, audit logging and interactive OpenAPI docs.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "openapi": "tsx scripts/export-openapi.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "dev:local": "tsx scripts/dev-local.ts",
+    "build": "node scripts/vendor.mjs",
+    "predev": "node scripts/vendor.mjs",
+    "predev:local": "node scripts/vendor.mjs"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@hono/node-server": "^2.1.6",
+    "@hono/zod-openapi": "^1.6.3",
+    "@vercel/functions": "^3.10.6",
+    "hono": "^4.13.16",
+    "jose": "^6.2.15",
+    "postgres": "^3.4.9",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@scalar/api-reference": "^1.74.0",
+    "@types/node": "^22.20.5",
+    "embedded-postgres": "^17.11.0-beta.19",
+    "prettier": "^3.9.10",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^5.1.0"
+  }
+}

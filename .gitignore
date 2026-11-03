@@ -1,0 +1,13 @@
+.local/
+node_modules/
+.env
+.env.*
+!.env.example
+scratch/
+coverage/
+.vercel/
+*.log
+.DS_Store
+*.draft.md
+.claude/
+public/vendor/

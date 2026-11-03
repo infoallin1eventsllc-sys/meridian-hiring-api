@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Meridian Hire · Pipeline board</title>
+    <meta
+      name="description"
+      content="A live demo of the Meridian Hire API: a hiring pipeline for recruiting teams, with stage history, webhooks and an audit trail."
+    />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Meridian Hire home">
+        <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="2" y="2" width="20" height="20" rx="6" fill="currentColor" opacity=".9" />
+          <path
+            d="M7 15.5V8.5l5 4 5-4v7"
+            fill="none"
+            stroke="var(--bg)"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+        Meridian Hire
+      </a>
+      <span
+        class="pill"
+        id="sample-pill"
+        hidden
+        title="Everything on this board is made-up sample data in a private sandbox"
+        ><span class="dot"></span>Sample data</span
+      >
+      <a class="btn ghost" href="/docs">API docs</a>
+      <a
+        class="btn ghost hide-phone"
+        href="https://github.com/infoallin1eventsllc-sys/meridian-hiring-api"
+        rel="noopener"
+        >Source</a
+      >
+      <button class="btn" id="restart" type="button" hidden>Start over</button>
+    </header>
+
+    <main id="main">
+      <section id="welcome" class="welcome" hidden>
+        <div class="panel">
+          <h1>A hiring pipeline any recruiting tool can plug into.</h1>
+          <p class="lead">
+            Meridian Hire is an API for recruiting teams. Companies post jobs, candidates apply with a résumé, and each
+            application moves from Applied to Hired, with every step on record. This board is a window onto it.
+          </p>
+          <div class="actions">
+            <button class="btn primary" id="start" type="button">Open a demo board</button>
+            <a class="btn" href="/docs">Try the API in your browser</a>
+          </div>
+          <p class="fine" id="welcome-note">
+            Creates a private sandbox company with made-up candidates. It is yours alone and is deleted after 24 hours.
+          </p>
+        </div>
+        <div class="panel">
+          <ul>
+            <li>
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                <path
+                  d="M3 8.5l3 3 7-7"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                /></svg
+              ><span
+                ><strong>Each company is walled off</strong>The database itself refuses to show one company another's
+                records.</span
+              >
+            </li>
+            <li>
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                <path
+                  d="M3 8.5l3 3 7-7"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                /></svg
+              ><span
+                ><strong>Every move is on record</strong>Stage changes are saved with who made them and why, and can't
+                be edited later.</span
+              >
+            </li>
+            <li>
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                <path
+                  d="M3 8.5l3 3 7-7"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                /></svg
+              ><span
+                ><strong>Other systems hear about it</strong>Each change is sent, signed, to the firm's own software,
+                and retried if it doesn't arrive.</span
+              >
+            </li>
+            <li>
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                <path
+                  d="M3 8.5l3 3 7-7"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                /></svg
+              ><span
+                ><strong>Candidates can be erased</strong>One request removes a person, their applications and their
+                files, for privacy requests.</span
+              >
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="board-view" hidden>
+        <div class="summary">
+          <h1 id="company-name">Pipeline</h1>
+          <span class="muted mono" id="expires"></span>
+        </div>
+        <div class="filters" role="search">
+          <label class="sr-only" for="job-filter">Job</label>
+          <select class="field" id="job-filter">
+            <option value="">All open jobs</option>
+          </select>
+          <label class="sr-only" for="search">Search candidates</label>
+          <input class="field" id="search" type="search" placeholder="Search name or email" autocomplete="off" />
+          <button class="btn" id="clear" type="button">Clear filters</button>
+          <button class="btn" id="export" type="button">Export CSV</button>
+          <span class="readout" id="readout" aria-live="polite"></span>
+        </div>
+
+        <div class="panel kpis" id="kpis" aria-label="Pipeline summary"></div>
+
+        <div class="layout">
+          <section class="panel board-wrap" aria-labelledby="board-title" tabindex="-1">
+            <h2 class="sr-only" id="board-title">Applications by stage</h2>
+            <div class="board" id="board"></div>
+          </section>
+          <aside class="panel" aria-labelledby="activity-title">
+            <div class="panel-head">
+              <h2 class="panel-title" id="activity-title">What the API recorded</h2>
+              <button class="btn small ghost" id="refresh-activity" type="button">Refresh</button>
+            </div>
+            <p class="panel-sub" style="margin-bottom: 12px">The audit log and webhook deliveries, newest first.</p>
+            <ul class="feed" id="feed"></ul>
+          </aside>
+        </div>
+      </section>
+
+      <section id="fatal" class="panel state" hidden>
+        <strong id="fatal-title">Couldn't reach the API</strong>
+        <span id="fatal-detail"></span><br />
+        <button class="btn" id="retry" type="button">Try again</button>
+      </section>
+    </main>
+
+    <div class="scrim" id="scrim" hidden></div>
+    <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" hidden></aside>
+    <div class="toast" id="toast" role="status" hidden></div>
+
+    <footer>
+      Built by <a href="https://meridianinterface.com">Meridian Interface</a>, Houston. Sandbox data is fictional.
+    </footer>
+  </body>
+</html>
