@@ -22,7 +22,7 @@ on conflict (id) do update
 
 -- 2. Every minute, ask the API to send due webhooks and tidy up expired sandboxes.
 create extension if not exists pg_cron;
-create extension if not exists pg_net;
+create extension if not exists pg_net with schema extensions;
 
 select vault.create_secret(encode(extensions.gen_random_bytes(32), 'hex'), 'hire_cron_secret', 'Bearer token for /internal/tick')
 where not exists (select 1 from vault.secrets where name = 'hire_cron_secret');

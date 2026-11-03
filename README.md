@@ -20,6 +20,23 @@ It comes with interactive docs where every endpoint can be tried in the browser,
 - **Privacy built in.** One call erases a candidate along with their applications, history and files. Webhook payloads carry ids, not personal data. The audit log records that an erasure happened, without recording who was erased.
 - **Self-serve sandbox.** `POST /v1/sandbox` (no key needed) creates a demo company with sample data and an admin key, and deletes it after 24 hours.
 
+## How I built it
+
+I built this with [Claude Code](https://claude.com/claude-code), Anthropic's AI coding agent, as my pair programmer. Claude wrote the code, the tests and the first drafts of these docs. My part was the one a product lead does: choosing what to build, approving the plan and the stack, and deciding what went live.
+
+**What I decided**
+
+- The product: I asked for a project covering APIs and data storage. I chose a hiring pipeline API that works both as a portfolio piece and as something recruiting firms could buy.
+- A two-phase plan: a portfolio-grade first version built on foundations that won't need rewriting, then billing, onboarding, legal and data-retention work before selling it.
+- The stack: TypeScript on Vercel and Supabase, the services my studio already runs.
+- To publish the code so it can be read, but keep the rights, since it's a product.
+- What went live. Nothing was pushed or deployed without my go-ahead.
+
+**How the work was checked**
+
+- 66 automated tests run against a real Postgres database on every push. They include tests showing one company can't read or write another company's data, even when the API code is bypassed.
+- Before launch, a separate security-review agent audited the code against a 20-point checklist. It found no critical issues, one high and five medium. The high one was that public sandboxes had no storage limits. All six were fixed before launch except a bot check on sandbox sign-up, which is planned.
+
 ## Engineering decisions
 
 | Decision                                                                                                     | Why                                                                                                                                                                                                                                                                               |
