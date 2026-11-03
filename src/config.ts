@@ -28,13 +28,16 @@ export function loadConfig(): Config {
   const encryptionKey = Buffer.from(key, 'base64');
   if (encryptionKey.length !== 32) throw new Error('APP_ENCRYPTION_KEY must decode to 32 bytes');
   const onVercel = Boolean(process.env.VERCEL);
-  if (onVercel && !optional('PUBLIC_BASE_URL')) throw new Error('PUBLIC_BASE_URL is required in production');
+  // Vercel tells each deployment its production domain, so PUBLIC_BASE_URL is optional there.
+  const vercelDomain = optional('VERCEL_PROJECT_PRODUCTION_URL');
+  const publicBaseUrl = optional('PUBLIC_BASE_URL') ?? (vercelDomain ? `https://${vercelDomain}` : undefined);
+  if (onVercel && !publicBaseUrl) throw new Error('PUBLIC_BASE_URL is required in production');
   if (onVercel && optional('WEBHOOK_ALLOW_PRIVATE') === '1') {
     throw new Error('WEBHOOK_ALLOW_PRIVATE turns off SSRF protection and must not be set in production');
   }
   return {
     databaseUrl,
-    publicBaseUrl: (optional('PUBLIC_BASE_URL') ?? 'http://localhost:8787').replace(/\/$/, ''),
+    publicBaseUrl: (publicBaseUrl ?? 'http://localhost:8787').replace(/\/$/, ''),
     encryptionKey,
     cronSecret: optional('CRON_SECRET'),
     supabaseUrl: optional('SUPABASE_URL')?.replace(/\/$/, ''),

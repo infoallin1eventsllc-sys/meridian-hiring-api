@@ -14,8 +14,13 @@ export class SupabaseStorage implements Storage {
     private readonly bucket: string,
   ) {}
 
-  private headers(extra: Record<string, string> = {}) {
-    return { Authorization: `Bearer ${this.serviceKey}`, apikey: this.serviceKey, ...extra };
+  // New-style secret keys (sb_secret_…) go in the apikey header only; legacy
+  // service_role keys are JWTs and also go in Authorization.
+  private headers(extra: Record<string, string> = {}): Record<string, string> {
+    const auth: Record<string, string> = this.serviceKey.startsWith('sb_')
+      ? { apikey: this.serviceKey }
+      : { apikey: this.serviceKey, Authorization: `Bearer ${this.serviceKey}` };
+    return { ...auth, ...extra };
   }
 
   private objectUrl(path: string) {
