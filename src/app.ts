@@ -104,6 +104,22 @@ function secretMatches(given: string | undefined, expected: string | undefined) 
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+/**
+ * On Supabase the cron secret is generated inside the database (see
+ * db/supabase/setup.sql) and read from Vault here, so no person ever has to
+ * copy it between systems.
+ */
+async function vaultSecretMatches(deps: Deps, token: string | undefined) {
+  if (!token) return false;
+  try {
+    const [row] = await deps.sql<{ secret: string }[]>`
+      select decrypted_secret as secret from vault.decrypted_secrets where name = 'hire_cron_secret'`;
+    return secretMatches(token, row?.secret);
+  } catch {
+    return false; // no Vault (plain Postgres)
+  }
+}
+
 export function createApp(deps: Deps) {
   const app = new OpenAPIHono<AppEnv>();
 
@@ -198,10 +214,12 @@ export function createApp(deps: Deps) {
     }
   });
 
-  // Called every minute by Supabase pg_cron (and daily by Vercel Cron as a backstop).
+  // Called every minute by Supabase pg_cron.
   app.on(['GET', 'POST'], '/internal/tick', async (c) => {
     const token = /^Bearer\s+(.+)$/i.exec(c.req.header('authorization') ?? '')?.[1];
-    if (!secretMatches(token, deps.config.cronSecret)) throw new ApiError('unauthorized', 'Bad cron secret.');
+    if (!secretMatches(token, deps.config.cronSecret) && !(await vaultSecretMatches(deps, token))) {
+      throw new ApiError('unauthorized', 'Bad cron secret.');
+    }
     const webhooks = await processDueDeliveries(deps, { limit: 100 });
     const maintenance = await runMaintenance(deps);
     return c.json({ webhooks, maintenance });

@@ -20,8 +20,9 @@ export interface Config {
 }
 
 export function loadConfig(): Config {
-  const databaseUrl = optional('DATABASE_URL');
-  if (!databaseUrl) throw new Error('DATABASE_URL is required');
+  // POSTGRES_URL is what Vercel's Supabase integration sets (the pooled connection).
+  const databaseUrl = optional('DATABASE_URL') ?? optional('POSTGRES_URL');
+  if (!databaseUrl) throw new Error('DATABASE_URL (or POSTGRES_URL) is required');
   const key = optional('APP_ENCRYPTION_KEY');
   if (!key) throw new Error('APP_ENCRYPTION_KEY is required (32 random bytes, base64)');
   const encryptionKey = Buffer.from(key, 'base64');

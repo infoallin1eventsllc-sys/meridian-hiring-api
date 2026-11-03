@@ -3,8 +3,15 @@ import postgres from 'postgres';
 export type Sql = postgres.Sql;
 export type Tx = postgres.TransactionSql;
 
-export function createSql(url: string): Sql {
-  return postgres(url, {
+export function createSql(rawUrl: string): Sql {
+  // Hosted connection strings can carry extra query flags (Vercel's Supabase
+  // integration adds some). Postgres would reject them as settings, so keep
+  // only sslmode and turn that into the driver's ssl option.
+  const url = new URL(rawUrl);
+  const sslmode = url.searchParams.get('sslmode');
+  url.search = '';
+  return postgres(url.toString(), {
+    ssl: sslmode && sslmode !== 'disable' ? 'require' : undefined,
     // Supabase's pooler runs in transaction mode, which does not support
     // prepared statements.
     prepare: false,

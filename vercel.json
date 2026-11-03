@@ -1,12 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run build",
-  "crons": [
-    {
-      "path": "/internal/tick",
-      "schedule": "0 6 * * *"
-    }
-  ],
   "headers": [
     {
       "source": "/(.*)",

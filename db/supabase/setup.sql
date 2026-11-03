@@ -1,9 +1,10 @@
 -- Supabase-only setup, run once per project after `npm run db:migrate`.
 -- (Tests run on plain Postgres and skip this file.)
 --
--- Replace the two placeholders before running:
+-- Replace the placeholder before running:
 --   __PUBLIC_BASE_URL__  e.g. https://meridian-hire.vercel.app
---   __CRON_SECRET__      the same value as the CRON_SECRET environment variable
+-- The cron secret is generated here, kept in Vault, and checked by the API
+-- against Vault, so nobody has to copy it anywhere.
 
 -- 0. The hire schema is only ever reached through the API, never Supabase's Data API.
 revoke all on schema hire, hire_meta from anon, authenticated;
@@ -23,7 +24,7 @@ on conflict (id) do update
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
 
-select vault.create_secret('__CRON_SECRET__', 'hire_cron_secret', 'Bearer token for /internal/tick')
+select vault.create_secret(encode(extensions.gen_random_bytes(32), 'hex'), 'hire_cron_secret', 'Bearer token for /internal/tick')
 where not exists (select 1 from vault.secrets where name = 'hire_cron_secret');
 
 select cron.schedule(
