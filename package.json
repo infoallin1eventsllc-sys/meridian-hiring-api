@@ -34,7 +34,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@scalar/api-reference": "^1.74.0",
+    "@scalar/api-reference": "^1.76.4",
     "@types/node": "^22.20.5",
     "embedded-postgres": "^17.11.0-beta.19",
     "esbuild": "0.28.2",
