@@ -75,4 +75,11 @@ describe('validation and error shapes', () => {
     expect(res.headers.get('request-id')).toMatch(/^req_/);
     expect(res.body.status).toBe('ok');
   });
+
+  it('sends visitors at / to the pipeline board', async () => {
+    const t = makeApp();
+    const res = await t.request('GET', '/');
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe('/index.html');
+  });
 });

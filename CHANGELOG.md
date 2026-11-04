@@ -13,5 +13,5 @@ Phase 1: the portfolio-grade MVP.
 - Candidate erasure for privacy requests, including queued file deletion that survives a storage outage.
 - Self-serve 24-hour sandboxes seeded with sample data, a pipeline board, and interactive OpenAPI docs.
 - Abuse limits for public sandboxes: caps on records, files and daily changes, per-network and global creation limits, and webhook targets locked to test receivers.
-- 66 tests against real Postgres, run in GitHub Actions on every push.
-- Vercel deploy fix: the entry file imports Hono directly, which Vercel needs to recognise the app.
+- 67 tests against real Postgres, run in GitHub Actions on every push.
+- Vercel deploy fixes: the entry file imports Hono directly, which Vercel needs to recognise the app, and / redirects to the pipeline board.

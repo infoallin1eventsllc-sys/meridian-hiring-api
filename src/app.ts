@@ -205,6 +205,10 @@ export function createApp(deps: Deps) {
 
   app.get('/docs', (c) => c.html(docsPage()));
 
+  // On Vercel this function answers "/" before the static files in public/ are
+  // consulted, so send visitors to the board explicitly.
+  app.get('/', (c) => c.redirect('/index.html', 302));
+
   app.get('/health', async (c) => {
     try {
       await deps.sql`select 1`;
