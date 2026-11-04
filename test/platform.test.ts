@@ -74,6 +74,7 @@ describe('sandboxes', () => {
     expect(res.status).toBe(201);
     expect(res.body.api_key).toMatch(/^mh_sandbox_/);
     expect(res.body.company.plan).toBe('sandbox');
+    expect(res.body.company.name).toBe('Meridian Interface Staffing (sandbox)');
     const key = res.body.api_key;
 
     const me = await t.request('GET', '/v1/me', { key });

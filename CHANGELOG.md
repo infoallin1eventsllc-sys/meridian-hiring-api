@@ -23,4 +23,5 @@ Phase 1: the portfolio-grade MVP.
 - The welcome page shows what Meridian Hire becomes with a pilot or custom build (team logins, careers page, emails and scheduling, feedback and reports, tool connections, agency mode) and links to Meridian Interface. The add-candidate form explains mistakes in plain English and marks the fields to fix. No accessibility violations (axe) on the board, candidate panel and form, in light and dark mode.
 - Dependabot groups minor and patch updates and skips major versions that need their own review (embedded-postgres tracks Supabase's Postgres 17, @types/node tracks Node 22, the postgres driver, TypeScript). Lighthouse scores for the live demo in the README.
 - Link previews (Open Graph) for the demo, a live-demo check every three hours that emails on failure, and a plainer message when bot protection turns a request away.
+- The sample company is now "Meridian Interface Staffing"; screenshots and the link-preview picture updated to match.
 - The API's own database login (`meridian_api`) is in `db/supabase/setup.sql`; security headers now match between the API and static files, and the board's CSP allows no inline styles.

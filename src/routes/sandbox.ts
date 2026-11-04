@@ -75,7 +75,7 @@ sandbox.openapi(
     const company = await sql.begin(async (tx) => {
       const [row] = await tx`
         insert into hire.companies (name, plan, expires_at)
-        values ('Bluebonnet Staffing (sandbox)', 'sandbox', now() + make_interval(hours => ${LIFETIME_HOURS}))
+        values ('Meridian Interface Staffing (sandbox)', 'sandbox', now() + make_interval(hours => ${LIFETIME_HOURS}))
         returning *`;
       await tx`
         insert into hire.api_keys (company_id, name, prefix, key_hash, scopes, created_by)
