@@ -17,6 +17,7 @@
       href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap"
     />
     <link rel="stylesheet" href="/styles.css" />
+    <script src="/vendor/botid.js" defer></script>
     <script src="/app.js" defer></script>
   </head>
   <body>
@@ -130,7 +131,21 @@
           <h1 id="company-name">Pipeline</h1>
           <span class="muted mono" id="expires"></span>
         </div>
+        <section class="panel guide" id="guide" aria-labelledby="guide-title" hidden>
+          <div class="panel-head">
+            <h2 class="panel-title" id="guide-title">See it work in two minutes</h2>
+            <button class="btn small ghost" id="guide-hide" type="button">Hide</button>
+          </div>
+          <ol class="guide-steps" id="guide-steps"></ol>
+          <p class="panel-sub">
+            Everything here goes through the same API a client's own software would use.
+            <a href="/docs">Open the API docs</a>, already signed in to this sandbox, to make the same calls from code.
+          </p>
+        </section>
+
         <div class="filters" role="search">
+          <button class="btn primary" id="add" type="button">Add candidate</button>
+          <button class="btn ghost" id="guide-show" type="button" hidden>Show guide</button>
           <label class="sr-only" for="job-filter">Job</label>
           <select class="field" id="job-filter">
             <option value="">All open jobs</option>
@@ -154,7 +169,7 @@
               <h2 class="panel-title" id="activity-title">What the API recorded</h2>
               <button class="btn small ghost" id="refresh-activity" type="button">Refresh</button>
             </div>
-            <p class="panel-sub" style="margin-bottom: 12px">The audit log and webhook deliveries, newest first.</p>
+            <p class="panel-sub spaced">The audit log and webhook deliveries, newest first.</p>
             <ul class="feed" id="feed"></ul>
           </aside>
         </div>

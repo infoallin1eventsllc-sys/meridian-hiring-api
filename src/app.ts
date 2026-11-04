@@ -132,7 +132,13 @@ export function createApp(deps: Deps) {
   });
   app.use(
     '*',
+    // The same values as the static files get from vercel.json, except style-src:
+    // the docs viewer (Scalar) sets inline styles, so only these responses allow them.
     secureHeaders({
+      strictTransportSecurity: 'max-age=63072000; includeSubDomains',
+      referrerPolicy: 'strict-origin-when-cross-origin',
+      xFrameOptions: 'DENY',
+      permissionsPolicy: { camera: [], microphone: [], geolocation: [] },
       contentSecurityPolicy: {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'"],

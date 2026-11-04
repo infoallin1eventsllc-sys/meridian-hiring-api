@@ -1,0 +1,6 @@
+// Browser entry for Vercel BotID, bundled to public/vendor/botid.js by vendor.mjs.
+// It wraps fetch so requests to the paths below carry BotID's proof that a real
+// browser sent them; src/bots.ts checks that proof on the server.
+import { initBotId } from 'botid/client/core';
+
+initBotId({ protect: [{ path: '/v1/sandbox', method: 'POST' }] });

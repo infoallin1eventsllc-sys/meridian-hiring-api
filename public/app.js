@@ -135,6 +135,62 @@ function daysSince(iso) {
   return d <= 0 ? 'today' : `${d}d`;
 }
 
+// Guide: four things to try, ticked off as the visitor does them. Progress is
+// kept per sandbox in this browser only.
+const GUIDE_KEY = 'meridian-hire.guide';
+const GUIDE_STEPS = [
+  ['add', 'Add a candidate', 'the way they would apply, with a résumé if you have one to hand.'],
+  ['move', 'Move someone forward', 'drag a card to another column, or open it and pick a stage.'],
+  [
+    'webhook',
+    'Watch the webhook arrive',
+    'in “What the API recorded”: each change is signed and sent to the firm’s own software.',
+  ],
+  ['erase', 'Erase a candidate', 'open one and remove them with their files, as a privacy request requires.'],
+];
+const guide = {
+  read() {
+    try {
+      const v = JSON.parse(localStorage.getItem(GUIDE_KEY) || 'null');
+      if (v && v.company === state.sandbox?.company?.id) return v;
+    } catch {}
+    return { company: state.sandbox?.company?.id, done: [], hidden: false };
+  },
+  write(v) {
+    try {
+      localStorage.setItem(GUIDE_KEY, JSON.stringify(v));
+    } catch {}
+  },
+  tick(step) {
+    const v = this.read();
+    if (v.done.includes(step)) return;
+    v.done.push(step);
+    this.write(v);
+    renderGuide();
+  },
+  setHidden(hidden) {
+    this.write({ ...this.read(), hidden });
+    renderGuide();
+  },
+};
+
+function renderGuide() {
+  const v = guide.read();
+  $('guide').hidden = v.hidden;
+  $('guide-show').hidden = !v.hidden;
+  $('guide-steps').replaceChildren(
+    ...GUIDE_STEPS.map(([id, title, detail]) => {
+      const done = v.done.includes(id);
+      return h(
+        'li',
+        { class: done ? 'done' : '' },
+        h('span', { class: 'tick', 'aria-hidden': 'true' }, done ? '✓' : ''),
+        h('span', {}, h('strong', {}, title), ` ${detail}`, done ? h('span', { class: 'sr-only' }, ' (done)') : ''),
+      );
+    }),
+  );
+}
+
 // Views ----------------------------------------------------------------------------
 
 function show(view) {
@@ -172,9 +228,7 @@ async function createSandbox() {
 }
 
 function renderSkeleton() {
-  $('kpis').replaceChildren(
-    ...[0, 1, 2, 3].map(() => h('div', { class: 'kpi' }, h('div', { class: 'skel', style: 'height:52px' }))),
-  );
+  $('kpis').replaceChildren(...[0, 1, 2, 3].map(() => h('div', { class: 'kpi' }, h('div', { class: 'skel tall' }))));
   $('board').replaceChildren(
     ...STAGES.map(([, label]) =>
       h(
@@ -208,6 +262,7 @@ async function loadBoard() {
     renderFilters();
     renderKpis();
     renderBoard();
+    renderGuide();
     loadActivity();
     if (state.selected) openDrawer(state.selected, { push: false });
   } catch (err) {
@@ -272,9 +327,11 @@ function renderBoard() {
     $('board').replaceChildren(
       h(
         'div',
-        { class: 'state', style: 'grid-column:1/-1' },
+        { class: 'state span-all' },
         h('strong', {}, anyFilter ? 'No applications match these filters' : 'No applications yet'),
-        anyFilter ? 'Try another job or a different search.' : 'Create one with POST /v1/applications in the API docs.',
+        anyFilter
+          ? 'Try another job or a different search.'
+          : 'Add one with “Add candidate”, or with POST /v1/applications in the API docs.',
         h('br'),
         anyFilter
           ? h('button', { class: 'btn', type: 'button', onclick: clearFilters }, 'Clear filters')
@@ -360,6 +417,7 @@ async function moveStage(app, to, note) {
     renderKpis();
     renderBoard();
     toast(`${updated.candidate.first_name} moved to ${STAGE_LABEL[to]}. Saved to history and sent to the webhook.`);
+    guide.tick('move');
     setTimeout(loadActivity, 800);
     if (state.selected === app.id) openDrawer(app.id, { push: false });
     return true;
@@ -396,8 +454,7 @@ const ACTIONS = {
 
 async function loadActivity() {
   const feed = $('feed');
-  if (!feed.children.length)
-    feed.replaceChildren(...[0, 1, 2].map(() => h('li', {}, h('div', { class: 'skel', style: 'height:34px' }))));
+  if (!feed.children.length) feed.replaceChildren(...[0, 1, 2].map(() => h('li', {}, h('div', { class: 'skel row' }))));
   try {
     if (!state.webhookId) {
       const hooks = await api('/v1/webhooks');
@@ -407,6 +464,7 @@ async function loadActivity() {
       api('/v1/audit-log?limit=12'),
       state.webhookId ? api(`/v1/webhooks/${state.webhookId}/deliveries?limit=8`) : { data: [] },
     ]);
+    if (deliveries.data.some((d) => d.status === 'succeeded' && d.event_type !== 'ping')) guide.tick('webhook');
     const items = [
       ...log.data.map((e) => ({
         at: e.created_at,
@@ -488,7 +546,7 @@ async function openDrawer(id, { push = true } = {}) {
       ),
       h('button', { class: 'btn small', type: 'button', onclick: closeDrawer }, 'Close'),
     ),
-    h('div', { class: 'skel', style: 'height:180px' }),
+    h('div', { class: 'skel block' }),
   );
   drawer.hidden = false;
   $('scrim').hidden = false;
@@ -504,12 +562,11 @@ async function openDrawer(id, { push = true } = {}) {
     const current = state.apps.find((a) => a.id === id) || app;
     const allowed = allowedMoves(current.stage);
     const noteInput = h('input', {
-      class: 'field',
+      class: 'field full',
       id: 'move-note',
       type: 'text',
       maxlength: '1000',
       placeholder: 'Add a note to the history (optional)',
-      style: 'width:100%;margin-bottom:8px',
     });
     drawer.replaceChildren(
       ...[
@@ -563,15 +620,17 @@ async function openDrawer(id, { push = true } = {}) {
               `${STAGE_LABEL[current.stage]} is a final stage, so this application can't move any more.`,
             ),
         h('div', { class: 'section-title' }, 'Résumé'),
-        resumes.data.length
-          ? resumes.data.map((r) =>
-              h(
-                'button',
-                { class: 'btn small', type: 'button', onclick: () => openResume(r.id) },
-                `Open ${r.file_name}`,
-              ),
-            )
-          : h('p', { class: 'muted' }, 'None uploaded. Try POST /v1/candidates/{id}/resumes in the docs.'),
+        h(
+          'div',
+          { class: 'moves' },
+          resumes.data.map((r) =>
+            h('button', { class: 'btn small', type: 'button', onclick: () => openResume(r.id) }, `Open ${r.file_name}`),
+          ),
+          resumeUploader(candidate.id, id),
+        ),
+        ...(resumes.data.length
+          ? []
+          : [h('p', { class: 'muted' }, 'None yet. Upload a PDF or Word file, up to 1 MB in a sandbox.')]),
         h('div', { class: 'section-title' }, 'Stage history'),
         h(
           'ol',
@@ -590,6 +649,8 @@ async function openDrawer(id, { push = true } = {}) {
             ),
           ),
         ),
+        h('div', { class: 'section-title' }, 'Privacy'),
+        eraseControl(candidate),
       ].flat(),
     );
   } catch (err) {
@@ -622,6 +683,248 @@ async function openResume(id) {
   }
 }
 
+const RESUME_TYPES =
+  '.pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const SANDBOX_RESUME_BYTES = 1024 * 1024;
+
+async function uploadResume(candidateId, file) {
+  if (file.size > SANDBOX_RESUME_BYTES) throw new ApiError(413, { detail: 'Sandbox résumés can be up to 1 MB.' });
+  const form = new FormData();
+  form.append('file', file);
+  let res;
+  try {
+    res = await fetch(`/v1/candidates/${candidateId}/resumes`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${state.sandbox.api_key}` },
+      body: form,
+    });
+  } catch {
+    throw new ApiError(0, { detail: 'The upload failed. Check your connection.' });
+  }
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new ApiError(res.status, data);
+  return data;
+}
+
+function resumeUploader(candidateId, appId) {
+  const input = h('input', {
+    type: 'file',
+    accept: RESUME_TYPES,
+    class: 'sr-only',
+    tabindex: '-1',
+    'aria-hidden': 'true',
+  });
+  const btn = h('button', { class: 'btn small', type: 'button', onclick: () => input.click() }, 'Upload résumé');
+  input.addEventListener('change', async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    btn.disabled = true;
+    btn.textContent = 'Uploading…';
+    try {
+      await uploadResume(candidateId, file);
+      toast(`${file.name} stored privately. It only opens through a link that expires in 5 minutes.`);
+      setTimeout(loadActivity, 300);
+      if (state.selected === appId) openDrawer(appId, { push: false });
+    } catch (err) {
+      toast(err.message, 'error');
+      btn.disabled = false;
+      btn.textContent = 'Upload résumé';
+    }
+  });
+  return [input, btn];
+}
+
+// Erasure takes two clicks: the first explains what goes, the second does it.
+function eraseControl(candidate) {
+  const name = `${candidate.first_name} ${candidate.last_name}`;
+  const box = h('div', { class: 'erase' });
+  const idle = () =>
+    box.replaceChildren(
+      h('p', { class: 'muted' }, 'For privacy requests: removes this person, their applications and their files.'),
+      h('button', { class: 'btn small danger-outline', type: 'button', onclick: ask }, 'Erase candidate…'),
+    );
+  const ask = () => {
+    box.replaceChildren(
+      h('p', {}, `Erase ${name}? Every application they made and their résumé files go too. This can't be undone.`),
+      h(
+        'div',
+        { class: 'moves' },
+        h(
+          'button',
+          { class: 'btn small danger', type: 'button', onclick: erase },
+          `Yes, erase ${candidate.first_name}`,
+        ),
+        h('button', { class: 'btn small', type: 'button', onclick: idle }, 'Cancel'),
+      ),
+    );
+    box.querySelector('.danger').focus();
+  };
+  async function erase(e) {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try {
+      await api(`/v1/candidates/${candidate.id}`, { method: 'DELETE' });
+      const gone = state.apps.filter((a) => a.candidate_id === candidate.id).length;
+      state.apps = state.apps.filter((a) => a.candidate_id !== candidate.id);
+      closeDrawer();
+      renderFilters();
+      renderKpis();
+      renderBoard();
+      toast(
+        `${name} erased, with ${gone} application${gone === 1 ? '' : 's'} and their files. The erasure is in the audit log.`,
+      );
+      guide.tick('erase');
+      setTimeout(loadActivity, 300);
+    } catch (err) {
+      toast(err.message, 'error');
+      btn.disabled = false;
+    }
+  }
+  idle();
+  return box;
+}
+
+// Add a candidate: the same request a careers page or job board would send.
+const SOURCES = [
+  ['', 'Not recorded'],
+  ['careers_page', 'Careers page'],
+  ['referral', 'Referral'],
+  ['linkedin', 'LinkedIn'],
+  ['job_board', 'Job board'],
+  ['agency', 'Agency'],
+];
+const FIELD_LABEL = {
+  job_id: 'Job',
+  'candidate.first_name': 'First name',
+  'candidate.last_name': 'Last name',
+  'candidate.email': 'Email',
+  note: 'Note',
+};
+
+function openAddForm() {
+  if ($('drawer').hidden) lastFocus = document.activeElement;
+  state.selected = null;
+  writeHash();
+  const drawer = $('drawer');
+  const head = h(
+    'div',
+    { class: 'drawer-head' },
+    h('div', {}, h('h2', { id: 'drawer-title' }, 'Add a candidate'), h('div', { class: 'muted' }, 'A new application')),
+    h('button', { class: 'btn small', type: 'button', onclick: closeDrawer }, 'Close'),
+  );
+  const row = (label, input, hint) =>
+    h(
+      'label',
+      { class: 'form-row' },
+      h('span', { class: 'form-label' }, label),
+      input,
+      hint ? h('span', { class: 'form-hint' }, hint) : null,
+    );
+  const text = (name, attrs = {}) =>
+    h('input', { class: 'field full', name, type: 'text', maxlength: '100', autocomplete: 'off', ...attrs });
+  const first = text('first_name', { required: true });
+  const last = text('last_name', { required: true });
+  const email = text('email', { type: 'email', maxlength: '254', required: true });
+  const job = h(
+    'select',
+    { class: 'field full', name: 'job_id', required: true },
+    state.jobs.map((j) => h('option', { value: j.id }, j.title)),
+  );
+  if (state.jobs.some((j) => j.id === state.filters.job)) job.value = state.filters.job;
+  const source = h(
+    'select',
+    { class: 'field full', name: 'source' },
+    SOURCES.map(([v, l]) => h('option', { value: v }, l)),
+  );
+  const file = h('input', { class: 'field full file', name: 'resume', type: 'file', accept: RESUME_TYPES });
+  const note = h('textarea', { class: 'field full', name: 'note', maxlength: '1000', rows: '2' });
+  const errors = h('div', { class: 'form-errors', role: 'alert', hidden: true });
+  const submit = h('button', { class: 'btn primary', type: 'submit' }, 'Add application');
+
+  if (!state.jobs.length) {
+    drawer.replaceChildren(head, h('p', { class: 'muted' }, 'There are no open jobs to apply to in this sandbox.'));
+  } else {
+    const form = h(
+      'form',
+      { class: 'form', novalidate: true },
+      h(
+        'p',
+        { class: 'muted' },
+        'This is what a careers page or job board sends when someone applies. It lands in Applied, is saved to the history, and a webhook goes out.',
+      ),
+      row('First name', first),
+      row('Last name', last),
+      row('Email', email, 'An email that has applied before is matched to the same person.'),
+      row('Job', job),
+      row('Where they came from', source),
+      row('Résumé (optional)', file, 'PDF or Word, up to 1 MB here. It is stored privately.'),
+      row('Note (optional)', note),
+      errors,
+      h('div', { class: 'moves' }, submit),
+    );
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errors.hidden = true;
+      const resume = file.files?.[0];
+      if (resume && resume.size > SANDBOX_RESUME_BYTES) {
+        errors.replaceChildren(h('strong', {}, 'That résumé is over 1 MB, the sandbox limit.'));
+        errors.hidden = false;
+        return;
+      }
+      const candidate = {
+        first_name: first.value.trim(),
+        last_name: last.value.trim(),
+        email: email.value.trim(),
+        ...(source.value ? { source: source.value } : {}),
+      };
+      submit.disabled = true;
+      submit.textContent = 'Adding…';
+      try {
+        const app = await api('/v1/applications', {
+          method: 'POST',
+          body: { job_id: job.value, candidate, ...(note.value.trim() ? { note: note.value.trim() } : {}) },
+        });
+        let problem = '';
+        if (resume) {
+          try {
+            await uploadResume(app.candidate_id, resume);
+          } catch (err) {
+            problem = ` The résumé wasn't stored: ${err.message}`;
+          }
+        }
+        guide.tick('add');
+        state.filters = { job: '', q: '' };
+        state.selected = app.id;
+        writeHash();
+        await loadBoard();
+        toast(
+          `${candidate.first_name} applied for ${app.job.title}. They're on the board, in the audit log, and a webhook went out.${problem}`,
+          problem ? 'error' : '',
+        );
+      } catch (err) {
+        const list = err.body?.errors;
+        errors.replaceChildren(
+          h('strong', {}, err.message),
+          list?.length
+            ? h(
+                'ul',
+                {},
+                list.map((x) => h('li', {}, `${FIELD_LABEL[x.path] || x.path}: ${x.message}`)),
+              )
+            : null,
+        );
+        errors.hidden = false;
+        submit.disabled = false;
+        submit.textContent = 'Add application';
+      }
+    });
+    drawer.replaceChildren(head, form);
+  }
+  drawer.hidden = false;
+  $('scrim').hidden = false;
+  (drawer.querySelector('input') || drawer.querySelector('button')).focus();
+}
+
 function closeDrawer() {
   $('drawer').hidden = true;
   $('scrim').hidden = true;
@@ -629,6 +932,7 @@ function closeDrawer() {
   writeHash();
   for (const c of document.querySelectorAll('.card[aria-current="true"]')) c.setAttribute('aria-current', 'false');
   if (lastFocus && document.contains(lastFocus)) lastFocus.focus();
+  else if (!$('board-view').hidden) $('add').focus();
 }
 
 // Keep focus inside the open drawer.
@@ -636,7 +940,7 @@ document.addEventListener('keydown', (e) => {
   if ($('drawer').hidden) return;
   if (e.key === 'Escape') closeDrawer();
   if (e.key !== 'Tab') return;
-  const items = [...$('drawer').querySelectorAll('button:not([disabled]), input, a[href]')];
+  const items = [...$('drawer').querySelectorAll('button:not([disabled]), input, select, textarea, a[href]')];
   if (!items.length) return;
   const [first, last] = [items[0], items[items.length - 1]];
   if (e.shiftKey && document.activeElement === first) {
@@ -709,6 +1013,9 @@ document.addEventListener('DOMContentLoaded', () => {
     $('start').focus();
   });
   $('scrim').addEventListener('click', closeDrawer);
+  $('add').addEventListener('click', openAddForm);
+  $('guide-hide').addEventListener('click', () => guide.setHidden(true));
+  $('guide-show').addEventListener('click', () => guide.setHidden(false));
   $('job-filter').addEventListener('change', (e) => {
     state.filters.job = e.target.value;
     writeHash();

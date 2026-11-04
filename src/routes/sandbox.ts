@@ -1,5 +1,6 @@
 import { createRoute } from '@hono/zod-openapi';
 import { hitRateLimit, setRateLimitHeaders } from '../auth.js';
+import { isBotRequest } from '../bots.js';
 import { bodyLimit } from 'hono/body-limit';
 import { clientIp, clientNetwork } from '../context.js';
 import {
@@ -18,7 +19,8 @@ import { companyOut } from '../serializers.js';
 export const sandbox = router();
 
 const PER_IP_PER_HOUR = 5;
-const MAX_ACTIVE = 1000;
+// At 20 MB of résumés each, 200 sandboxes stay within a small storage plan.
+const MAX_ACTIVE = 200;
 // A ceiling across everyone, so rotating addresses can't crowd out real visitors.
 const GLOBAL_PER_HOUR = 60;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -32,13 +34,21 @@ sandbox.openapi(
     summary: 'Create a sandbox',
     description:
       'No key needed. Creates a private demo company filled with sample jobs, candidates and applications, ' +
-      'and returns an admin API key for it. Copy `api_key` into the Authorize box above to try every endpoint. ' +
+      'and returns an admin API key for it. On the live demo this only works from a browser (bot protection): ' +
+      'open the demo board first, and this page fills in its key so every endpoint can be tried. ' +
       `Sandboxes are deleted after ${LIFETIME_HOURS} hours.`,
-    responses: { 201: json(Sandbox, 'Your sandbox and its key'), ...problems(503) },
+    responses: { 201: json(Sandbox, 'Your sandbox and its key'), ...problems(403, 503) },
   }),
   async (c) => {
     const deps = c.get('deps');
     const { sql, storage, config } = deps;
+    // Checked first, so scripts can't use up the per-network and global allowances below.
+    if (await isBotRequest(c)) {
+      throw new ApiError(
+        'forbidden',
+        'Sandboxes can only be created from a browser. Open the demo board at / and the docs will use its key.',
+      );
+    }
     const limit = await hitRateLimit(sql, `sandbox:ip:${clientNetwork(c)}`, 3600, PER_IP_PER_HOUR);
     setRateLimitHeaders(c, PER_IP_PER_HOUR, limit);
     if (limit.exceeded) {

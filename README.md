@@ -6,7 +6,11 @@ A hiring pipeline API for recruiting firms: a small, multi-company applicant tra
 
 It comes with interactive docs where every endpoint can be tried in the browser, and a pipeline board so people who don't write code can watch it work. Both run on a private sandbox company that anyone can create in one click.
 
-![The pipeline board: four summary numbers above six stage columns of candidate cards](docs/board.png)
+**Live demo: [meridian-hiring-api.vercel.app](https://meridian-hiring-api.vercel.app)** · [API docs](https://meridian-hiring-api.vercel.app/docs)
+
+**Try it in two minutes:** open a demo board, then follow the guide at the top. Add a candidate with a résumé, move someone to Interview, watch the signed webhook arrive in "What the API recorded", and erase a candidate the way a privacy request would. The API docs pick up the same sandbox's key, so every call can then be repeated from code.
+
+![The pipeline board: a four-step guide, four summary numbers and six stage columns of candidate cards](docs/board.png)
 
 ## What it does
 
@@ -18,7 +22,8 @@ It comes with interactive docs where every endpoint can be tried in the browser,
 - **Multi-company from day one.** Each company has its own API keys (scoped `read`, `write`, `admin`) and its own logins (Supabase Auth). Postgres row-level security means a company can't see another's data, even through a query bug.
 - **Rate limits, audit log, clear errors.** Per-company limits come with standard `RateLimit-*` headers. An append-only audit log records who did what. Every error uses one [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) shape that names each bad field.
 - **Privacy built in.** One call erases a candidate along with their applications, history and files. Webhook payloads carry ids, not personal data. The audit log records that an erasure happened, without recording who was erased.
-- **Self-serve sandbox.** `POST /v1/sandbox` (no key needed) creates a demo company with sample data and an admin key, and deletes it after 24 hours.
+- **Self-serve sandbox.** `POST /v1/sandbox` (no key needed) creates a demo company with sample data and an admin key, and deletes it after 24 hours. On the live demo it only answers real browsers (Vercel BotID), so open the board first.
+- **A board for people who don't write code.** Add a candidate with a résumé, move cards between stages, open a résumé through its private link, erase a candidate, export what's on screen to CSV, and watch the audit log and webhook deliveries update. It's plain HTML and JavaScript calling the public API with the sandbox key, so it shows exactly what a client could build.
 
 ## How I built it
 
@@ -34,8 +39,8 @@ I built this with [Claude Code](https://claude.com/claude-code), Anthropic's AI 
 
 **How the work was checked**
 
-- 67 automated tests run against a real Postgres database on every push. They include tests showing one company can't read or write another company's data, even when the API code is bypassed.
-- Before launch, a separate security-review agent audited the code against a 20-point checklist. It found no critical issues, one high and five medium. The high one was that public sandboxes had no storage limits. All six were fixed before launch except a bot check on sandbox sign-up, which is planned.
+- 70 automated tests run against a real Postgres database on every push. They include tests showing one company can't read or write another company's data, even when the API code is bypassed.
+- Before launch, a separate security-review agent audited the code against a 20-point checklist. It found no critical issues, one high and five medium. The high one was that public sandboxes had no storage limits. All six were fixed before launch except a bot check on sandbox sign-up. A second audit after going live found no critical or high issues; its main recommendation, that bot check, was then added with Vercel BotID, along with matching security headers on every response and a stricter style policy for the board.
 
 ## Engineering decisions
 
@@ -50,6 +55,9 @@ I built this with [Claude Code](https://claude.com/claude-code), Anthropic's AI 
 | Cursor pagination on `(created_at, id)`                                                                      | Pages don't skip or repeat rows when new records arrive.                                                                                                                                                                                                                          |
 | Rate limits counted in Postgres                                                                              | No extra service to run or pay for at this size. A shared cache like Redis is the upgrade path if traffic grows.                                                                                                                                                                  |
 | Sandboxes instead of one shared demo company                                                                 | Each visitor gets an isolated company, which also demonstrates the multi-company design. Sandbox creation is limited per network and overall. Each sandbox has caps on records, files and daily changes, can only send webhooks to test receivers, and is deleted after 24 hours. |
+| The API connects as its own database login (`meridian_api`), not the admin account                           | It can read and write the hiring tables and nothing else in the project, and each request still drops to `hire_app` so row-level security applies. See `db/supabase/setup.sql`.                                                                                                   |
+| Webhooks sent at once, retried every minute by Vercel Cron                                                   | A stage change is delivered within a second. If the receiver is down, the every-minute job (authorised by `CRON_SECRET`) works through the retry schedule and cleans up expired sandboxes.                                                                                        |
+| Bot protection (Vercel BotID) before any sandbox is created                                                  | Scripts are turned away before they can use up the per-network and global allowances, so real visitors can always open a demo. If BotID itself fails, the rate limits still apply.                                                                                                |
 | Hono on Vercel, Supabase for Postgres, Auth and Storage                                                      | Small, fast, TypeScript end to end, and hosted on services the studio already runs.                                                                                                                                                                                               |
 
 ## Run it

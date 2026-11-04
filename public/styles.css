@@ -669,6 +669,120 @@ main {
   color: #fff;
 }
 
+/* Sizes that used to be inline styles (the CSP allows no inline styles). */
+.skel.tall {
+  height: 52px;
+}
+.skel.row {
+  height: 34px;
+}
+.skel.block {
+  height: 180px;
+}
+.state.span-all {
+  grid-column: 1 / -1;
+}
+.field.full {
+  width: 100%;
+}
+.drawer .field.full {
+  margin-bottom: 8px;
+}
+.panel-sub.spaced {
+  margin-bottom: 12px;
+}
+
+/* Guide ---------------------------------------------------------------------- */
+.guide {
+  margin-bottom: 16px;
+}
+.guide-steps {
+  list-style: none;
+  margin: 4px 0 12px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.guide-steps li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  color: var(--muted);
+}
+.guide-steps strong {
+  display: block;
+  color: var(--fg);
+  font-weight: 500;
+}
+.guide-steps .tick {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line-2);
+  font-size: 12px;
+  color: var(--accent-ink);
+}
+.guide-steps li.done .tick {
+  background: var(--pos);
+  border-color: var(--pos);
+}
+.guide a {
+  color: var(--accent);
+}
+
+/* Forms and erasure ---------------------------------------------------------- */
+.form-row {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.form-label {
+  font-size: 12px;
+  font-weight: 500;
+}
+.form-hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: -4px;
+  margin-bottom: 4px;
+}
+.form .field.file {
+  padding: 6px 10px;
+}
+textarea.field {
+  padding: 8px 12px;
+  resize: vertical;
+  font: inherit;
+}
+.form-errors {
+  border: 1px solid var(--neg);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 8px 0 12px;
+  color: var(--neg);
+}
+.form-errors ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.btn.danger {
+  background: var(--neg);
+  border-color: var(--neg);
+  color: #fff;
+  font-weight: 500;
+}
+.btn.danger-outline {
+  color: var(--neg);
+}
+.erase p {
+  margin: 0 0 8px;
+}
+
 footer {
   color: var(--muted);
   font-size: 12px;
@@ -718,6 +832,14 @@ footer {
   .filters .field,
   .filters select {
     flex: 1 1 160px;
+  }
+  .guide-steps {
+    grid-template-columns: 1fr;
+  }
+}
+@media (min-width: 761px) and (max-width: 1100px) {
+  .guide-steps {
+    grid-template-columns: 1fr 1fr;
   }
 }
 @media (pointer: coarse) {
