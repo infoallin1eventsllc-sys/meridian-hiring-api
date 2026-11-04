@@ -17,6 +17,6 @@
     agent: { disabled: true },
     defaultHttpClient: { targetKey: 'shell', clientKey: 'curl' },
     authentication: { preferredSecurityScheme: 'bearerAuth', securitySchemes: { bearerAuth: { token: token } } },
-    metaData: { title: 'Meridian Hire API docs' },
+    metaData: { title: 'Meridian Interface Hire · API docs' },
   });
 })();

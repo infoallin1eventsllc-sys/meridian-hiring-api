@@ -19,9 +19,11 @@ import { processDueDeliveries } from './webhooks.js';
 
 export const API_VERSION = '1.0.0';
 
+// The docs viewer, pinned to one version on jsDelivr. The integrity hash makes the
+// browser refuse the file if a single byte differs. (Vercel doesn't publish files
+// that a build step writes into public/, so it can't be self-hosted from there.)
 const SCALAR = {
-  // Self-hosted (public/vendor) so the page can run with script-src 'self' only.
-  src: '/vendor/scalar-api-reference-1.74.0.js',
+  src: 'https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.74.0/dist/browser/standalone.js',
   integrity: 'sha384-VXnKAz61Xwc3tbw1P+KKrUP7YbcsSl1Ik4is5UnogJyw9XEYZ5Ay/T1i0zPYtSZH',
 };
 
@@ -32,11 +34,10 @@ saved to a stage history and sent to your **webhooks**.
 
 ## Try it in two steps
 
-1. Open **Sandbox → Create a sandbox** below and press *Test Request*. No key needed. You get a private demo
-   company full of sample data, plus an API key for it.
-2. Copy the \`api_key\` into **Authentication** (Bearer), then call any endpoint.
-
-If you started a sandbox from the [pipeline board](/), its key is already filled in here.
+1. Open the [pipeline board](/) and press **Open a demo board**. You get a private demo company full of sample
+   data. (On the live demo, sandboxes can only be created from a browser, so the board does it for you.)
+2. Come back here: its key is already filled in under **Authentication**, so every endpoint can be called with
+   *Test Request*. Running locally, **Sandbox → Create a sandbox** below works too.
 
 ## Basics
 
@@ -92,7 +93,7 @@ function docsPage() {
 </head>
 <body>
   <div id="app"></div>
-  <script src="${SCALAR.src}" integrity="${SCALAR.integrity}"></script>
+  <script src="${SCALAR.src}" integrity="${SCALAR.integrity}" crossorigin="anonymous"></script>
   <script src="/docs-init.js"></script>
 </body>
 </html>`;
@@ -141,7 +142,7 @@ export function createApp(deps: Deps) {
       permissionsPolicy: { camera: [], microphone: [], geolocation: [] },
       contentSecurityPolicy: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'"],
+        scriptSrc: ["'self'", 'https://cdn.jsdelivr.net'],
         styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
         imgSrc: ["'self'", 'data:'],
         fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'],

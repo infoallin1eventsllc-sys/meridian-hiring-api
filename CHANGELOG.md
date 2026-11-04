@@ -13,10 +13,11 @@ Phase 1: the portfolio-grade MVP.
 - Candidate erasure for privacy requests, including queued file deletion that survives a storage outage.
 - Self-serve 24-hour sandboxes seeded with sample data, a pipeline board, and interactive OpenAPI docs.
 - Abuse limits for public sandboxes: caps on records, files and daily changes, per-network and global creation limits, and webhook targets locked to test receivers.
-- 70 tests against real Postgres, run in GitHub Actions on every push.
+- 71 tests against real Postgres, run in GitHub Actions on every push.
 - Vercel deploy fixes: the entry file imports Hono directly, which Vercel needs to recognise the app, and / redirects to the pipeline board.
 - The Meridian Interface mark and name in the header, browser tab and docs, replacing the placeholder icon.
 - Webhook retries and sandbox clean-up run every minute on Vercel Cron, authorised with `CRON_SECRET`.
 - The board can add a candidate with a résumé, upload or open a résumé, and erase a candidate, with a four-step guide that ticks off as visitors try each part.
 - Bot protection (Vercel BotID) on sandbox creation, checked before any rate-limit allowance is used; at most 200 active sandboxes.
+- Fix: the API docs page was blank on Vercel, because files a build step writes into `public/` are not published. The docs viewer now loads from jsDelivr, pinned to one version with an integrity hash, and the small BotID script is committed (a test checks it matches a fresh build).
 - The API's own database login (`meridian_api`) is in `db/supabase/setup.sql`; security headers now match between the API and static files, and the board's CSP allows no inline styles.

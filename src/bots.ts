@@ -3,7 +3,7 @@ import type { Ctx } from './context.js';
 
 /**
  * True when Vercel BotID says a request came from a script rather than a real
- * browser. The board loads BotID's browser script (public/vendor/botid.js) for
+ * browser. The board loads BotID's browser script (public/botid.js) for
  * the protected paths; anything without its proof is classified as a bot.
  *
  * Only runs on Vercel, where BotID's proxy paths exist (vercel.json). Locally and

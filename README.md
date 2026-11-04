@@ -39,7 +39,7 @@ I built this with [Claude Code](https://claude.com/claude-code), Anthropic's AI 
 
 **How the work was checked**
 
-- 70 automated tests run against a real Postgres database on every push. They include tests showing one company can't read or write another company's data, even when the API code is bypassed.
+- 71 automated tests run against a real Postgres database on every push. They include tests showing one company can't read or write another company's data, even when the API code is bypassed.
 - Before launch, a separate security-review agent audited the code against a 20-point checklist. It found no critical issues, one high and five medium. The high one was that public sandboxes had no storage limits. All six were fixed before launch except a bot check on sandbox sign-up. A second audit after going live found no critical or high issues; its main recommendation, that bot check, was then added with Vercel BotID, along with matching security headers on every response and a stricter style policy for the board.
 
 ## Engineering decisions
@@ -92,7 +92,7 @@ For Supabase, also run [`db/supabase/setup.sql`](db/supabase/setup.sql) once. It
 npm test
 ```
 
-There are 67 tests across isolation, auth, validation, the pipeline rules, résumés, webhooks, rate limits, the audit log, sandboxes, abuse limits and the API reference. They run against a real Postgres: a throwaway one locally, and a `postgres:17` service in CI. GitHub Actions runs formatting, type checks and the full suite on every push.
+There are 71 tests across isolation, auth, validation, the pipeline rules, résumés, webhooks, rate limits, the audit log, sandboxes, abuse limits, bot protection, the API reference and the committed BotID script. They run against a real Postgres: a throwaway one locally, and a `postgres:17` service in CI. GitHub Actions runs formatting, type checks and the full suite on every push.
 
 ## Project layout
 

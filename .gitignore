@@ -10,4 +10,3 @@ coverage/
 .DS_Store
 *.draft.md
 .claude/
-public/vendor/
