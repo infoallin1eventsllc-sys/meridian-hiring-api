@@ -85,9 +85,10 @@ function docsPage() {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Meridian Hire API docs</title>
-  <meta name="description" content="Interactive reference for the Meridian Hire hiring pipeline API.">
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <title>Meridian Interface Hire · API docs</title>
+  <meta name="description" content="Interactive reference for the Meridian Hire hiring pipeline API, by Meridian Interface.">
+  <link rel="icon" href="/favicon.png" type="image/png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 </head>
 <body>
   <div id="app"></div>

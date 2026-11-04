@@ -15,3 +15,4 @@ Phase 1: the portfolio-grade MVP.
 - Abuse limits for public sandboxes: caps on records, files and daily changes, per-network and global creation limits, and webhook targets locked to test receivers.
 - 67 tests against real Postgres, run in GitHub Actions on every push.
 - Vercel deploy fixes: the entry file imports Hono directly, which Vercel needs to recognise the app, and / redirects to the pipeline board.
+- The Meridian Interface mark and name in the header, browser tab and docs, replacing the placeholder icon.
