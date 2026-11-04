@@ -123,6 +123,8 @@ function toast(message, kind = '') {
   toastTimer = setTimeout(() => (el.hidden = true), kind === 'error' ? 6000 : 3500);
 }
 
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
 const dateFmt = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
 const timeFmt = new Intl.DateTimeFormat(undefined, {
   month: 'short',
@@ -437,7 +439,7 @@ const ACTIONS = {
   'candidate.created': () => 'Candidate added',
   'candidate.updated': () => 'Candidate details changed',
   'candidate.erased': (e) =>
-    `Candidate erased with ${e.metadata.applications_deleted} application(s) and ${e.metadata.resumes_deleted} file(s)`,
+    `Candidate erased with ${plural(e.metadata.applications_deleted, 'application')} and ${plural(e.metadata.resumes_deleted, 'file')}`,
   'application.created': () => 'New application',
   'application.stage_changed': (e) =>
     `Application moved from ${STAGE_LABEL[e.metadata.from]} to ${STAGE_LABEL[e.metadata.to]}`,
@@ -862,21 +864,44 @@ function openAddForm() {
       errors,
       h('div', { class: 'moves' }, submit),
     );
+    const fields = { 'candidate.first_name': first, 'candidate.last_name': last, 'candidate.email': email };
+    const showErrors = (title, items) => {
+      for (const el of Object.values(fields)) el.removeAttribute('aria-invalid');
+      for (const [path] of items) fields[path]?.setAttribute('aria-invalid', 'true');
+      errors.replaceChildren(
+        h('strong', {}, title),
+        ...(items.length
+          ? [
+              h(
+                'ul',
+                {},
+                items.map(([, text]) => h('li', {}, text)),
+              ),
+            ]
+          : []),
+      );
+      errors.hidden = false;
+      (items.length ? fields[items[0][0]] : null)?.focus();
+    };
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       errors.hidden = true;
       const resume = file.files?.[0];
-      if (resume && resume.size > SANDBOX_RESUME_BYTES) {
-        errors.replaceChildren(h('strong', {}, 'That résumé is over 1 MB, the sandbox limit.'));
-        errors.hidden = false;
-        return;
-      }
       const candidate = {
         first_name: first.value.trim(),
         last_name: last.value.trim(),
         email: email.value.trim(),
         ...(source.value ? { source: source.value } : {}),
       };
+      // The API checks all of this too; checking here first gives plain-English messages.
+      const missing = [];
+      if (!candidate.first_name) missing.push(['candidate.first_name', 'Enter a first name.']);
+      if (!candidate.last_name) missing.push(['candidate.last_name', 'Enter a last name.']);
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidate.email))
+        missing.push(['candidate.email', 'Enter a valid email address, like name@company.com.']);
+      if (missing.length) return showErrors('Please fix these before adding the application:', missing);
+      if (resume && resume.size > SANDBOX_RESUME_BYTES)
+        return showErrors('That résumé is over 1 MB, the sandbox limit. Try a smaller file.', []);
       submit.disabled = true;
       submit.textContent = 'Adding…';
       try {
@@ -902,18 +927,15 @@ function openAddForm() {
           problem ? 'error' : '',
         );
       } catch (err) {
-        const list = err.body?.errors;
-        errors.replaceChildren(
-          h('strong', {}, err.message),
-          list?.length
-            ? h(
-                'ul',
-                {},
-                list.map((x) => h('li', {}, `${FIELD_LABEL[x.path] || x.path}: ${x.message}`)),
-              )
-            : null,
-        );
-        errors.hidden = false;
+        const list = err.body?.errors || [];
+        if (err.status === 422 && list.length) {
+          showErrors(
+            'Please fix these before adding the application:',
+            list.map((x) => [x.path, `${FIELD_LABEL[x.path] || 'A field'}: ${x.message}`]),
+          );
+        } else {
+          showErrors(err.message, []);
+        }
         submit.disabled = false;
         submit.textContent = 'Add application';
       }
