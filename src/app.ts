@@ -219,7 +219,8 @@ export function createApp(deps: Deps) {
     }
   });
 
-  // Called every minute by Supabase pg_cron.
+  // Called every minute by Vercel Cron (vercel.json sends CRON_SECRET as the bearer token),
+  // or by Supabase pg_cron on hosts without Vercel Cron (db/supabase/setup.sql).
   app.on(['GET', 'POST'], '/internal/tick', async (c) => {
     const token = /^Bearer\s+(.+)$/i.exec(c.req.header('authorization') ?? '')?.[1];
     if (!secretMatches(token, deps.config.cronSecret) && !(await vaultSecretMatches(deps, token))) {

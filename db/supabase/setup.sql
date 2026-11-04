@@ -21,6 +21,8 @@ on conflict (id) do update
   set public = false, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
 
 -- 2. Every minute, ask the API to send due webhooks and tidy up expired sandboxes.
+--    Skip this step when the API runs on Vercel: vercel.json schedules the same call with
+--    Vercel Cron, using the CRON_SECRET environment variable.
 create extension if not exists pg_cron;
 create extension if not exists pg_net with schema extensions;
 

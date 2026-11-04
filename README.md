@@ -76,7 +76,7 @@ npm run db:migrate
 npm run dev
 ```
 
-For Supabase, also run [`db/supabase/setup.sql`](db/supabase/setup.sql) once. It creates the private résumé bucket and the every-minute job that sends webhooks and cleans up expired sandboxes.
+For Supabase, also run [`db/supabase/setup.sql`](db/supabase/setup.sql) once. It creates the private résumé bucket. On Vercel, set `CRON_SECRET` and Vercel Cron (in `vercel.json`) runs the every-minute job that sends webhooks and cleans up expired sandboxes; elsewhere, step 2 of that file schedules the same job with Supabase pg_cron.
 
 ## Tests
 
