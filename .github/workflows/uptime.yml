@@ -1,0 +1,46 @@
+name: Live demo check
+
+# Every three hours, checks that the live demo answers the way a visitor needs it to.
+# A failed run makes GitHub email the repo owner. It creates nothing: sandbox
+# creation is only checked for refusing scripts (bot protection), never for success.
+on:
+  schedule:
+    - cron: '17 */3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      BASE: https://meridian-hiring-api.vercel.app
+    steps:
+      - name: The API is up and can reach its database
+        run: |
+          body=$(curl -fsS --max-time 30 "$BASE/health")
+          echo "$body"
+          echo "$body" | grep -q '"status":"ok"'
+
+      - name: The board, its scripts, the link-preview image and the docs page load
+        run: |
+          for page in / /index.html /app.js /botid.js /og-image.png /docs /openapi.json; do
+            code=$(curl -sS -L -o /dev/null -w '%{http_code}' --max-time 30 "$BASE$page")
+            echo "$page -> $code"
+            [ "$code" = 200 ] || exit 1
+          done
+          curl -fsS --max-time 30 "$BASE/docs" | grep -q 'cdn.jsdelivr.net/npm/@scalar/api-reference@'
+
+      - name: Bot protection is on (a script can't create a sandbox)
+        run: |
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 -X POST "$BASE/v1/sandbox")
+          echo "POST /v1/sandbox from a script -> $code"
+          [ "$code" = 403 ]
+
+      - name: The every-minute job is protected and reachable
+        run: |
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 "$BASE/internal/tick")
+          echo "/internal/tick without the secret -> $code"
+          [ "$code" = 401 ]

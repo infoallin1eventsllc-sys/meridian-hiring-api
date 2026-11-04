@@ -40,6 +40,7 @@ I built this with [Claude Code](https://claude.com/claude-code), Anthropic's AI 
 **How the work was checked**
 
 - 71 automated tests run against a real Postgres database on every push. They include tests showing one company can't read or write another company's data, even when the API code is bypassed.
+- A scheduled GitHub Actions check (`.github/workflows/uptime.yml`) tests the live demo every three hours: the API and its database, the board, the docs, bot protection and the every-minute job. A failure emails the owner.
 - Lighthouse on the live demo's welcome page (4 Nov 2026), performance / accessibility / best practices / SEO: **99 / 100 / 100 / 100 on desktop, 95 / 100 / 100 / 100 on mobile**. axe finds no accessibility violations on the board, the candidate panel or the add-candidate form, in light and dark mode.
 - Before launch, a separate security-review agent audited the code against a 20-point checklist. It found no critical issues, one high and five medium. The high one was that public sandboxes had no storage limits. All six were fixed before launch except a bot check on sandbox sign-up. A second audit after going live found no critical or high issues; its main recommendation, that bot check, was then added with Vercel BotID, along with matching security headers on every response and a stricter style policy for the board.
 

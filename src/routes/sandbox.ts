@@ -46,7 +46,12 @@ sandbox.openapi(
     if (await isBotRequest(c)) {
       throw new ApiError(
         'forbidden',
-        'Sandboxes can only be created from a browser. Open the demo board at / and the docs will use its key.',
+        // Usually a script. Rarely a real browser whose privacy settings or extensions hide
+        // what BotID looks for, so the message says what to try rather than "you're a bot".
+        "We couldn't confirm this request came from a regular web browser, so the demo wasn't created. " +
+          'Please try again. If it keeps happening, open the demo in Chrome, Safari or Edge with ad- and ' +
+          'script-blocking extensions turned off for this page. (Scripts: create the sandbox from the board at /, ' +
+          'and the API docs will use its key.)',
       );
     }
     const limit = await hitRateLimit(sql, `sandbox:ip:${clientNetwork(c)}`, 3600, PER_IP_PER_HOUR);
