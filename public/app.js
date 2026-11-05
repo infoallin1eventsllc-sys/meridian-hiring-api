@@ -230,6 +230,8 @@ async function createSandbox() {
   try {
     const sb = await api('/v1/sandbox', { method: 'POST', auth: false });
     state.sandbox = sb;
+    // The webhook belongs to the old sandbox, if there was one.
+    state.webhookId = null;
     store.set(sb);
     state.filters = { job: '', q: '' };
     state.selected = null;
@@ -504,16 +506,22 @@ const ACTIONS = {
 async function loadActivity() {
   const feed = $('feed');
   if (!feed.children.length) feed.replaceChildren(...[0, 1, 2].map(() => h('li', {}, h('div', { class: 'skel row' }))));
+  // A refresh still running when the visitor opens a new sandbox must not write
+  // the old sandbox's webhook into the new one's state, or show its activity.
+  const sandbox = state.sandbox;
   try {
-    if (!state.webhookId) {
+    let webhookId = state.webhookId;
+    if (!webhookId) {
       const hooks = await api('/v1/webhooks');
       const demo = hooks.data.find((w) => w.url.endsWith('/demo/webhook-inbox')) ?? hooks.data[hooks.data.length - 1];
-      state.webhookId = demo?.id ?? null;
+      webhookId = demo?.id ?? null;
     }
     const [log, deliveries] = await Promise.all([
       api('/v1/audit-log?limit=12'),
-      state.webhookId ? api(`/v1/webhooks/${state.webhookId}/deliveries?limit=8`) : { data: [] },
+      webhookId ? api(`/v1/webhooks/${webhookId}/deliveries?limit=8`) : { data: [] },
     ]);
+    if (state.sandbox !== sandbox) return;
+    state.webhookId = webhookId;
     if (deliveries.data.some((d) => d.status === 'succeeded' && d.event_type !== 'ping')) guide.tick('webhook');
     const items = [
       ...log.data.map((e) => ({
@@ -554,6 +562,9 @@ async function loadActivity() {
         : [h('li', { class: 'muted' }, 'Nothing recorded yet.')]),
     );
   } catch (err) {
+    if (state.sandbox !== sandbox) return;
+    // Look the webhook up again on Retry, in case the one remembered is gone.
+    state.webhookId = null;
     feed.replaceChildren(
       h(
         'li',
