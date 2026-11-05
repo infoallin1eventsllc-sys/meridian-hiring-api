@@ -453,6 +453,10 @@ main {
   grid-template-columns: repeat(6, minmax(180px, 1fr));
   min-width: 1100px;
 }
+.board.loading {
+  opacity: 0.55;
+  transition: opacity 0.15s;
+}
 .col {
   padding: 16px 12px 16px;
   border-left: 1px solid var(--line);

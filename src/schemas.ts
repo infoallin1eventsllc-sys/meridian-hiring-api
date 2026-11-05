@@ -42,6 +42,16 @@ export const Problem = z
     detail: z.string(),
     request_id: z.string(),
     errors: z.array(z.object({ path: z.string(), message: z.string() })).optional(),
+    from: z.string().optional().openapi({ description: 'Refused stage moves: the current stage' }),
+    to: z.string().optional().openapi({ description: 'Refused stage moves: the stage asked for' }),
+    allowed: z
+      .array(z.string())
+      .optional()
+      .openapi({ description: 'Refused stage moves: the stages it can move to from here' }),
+    existing_id: z.string().optional().openapi({ description: 'Duplicates: the id of the record that already exists' }),
+    quota: z.string().optional().openapi({ description: 'Sandbox caps: which cap was reached' }),
+    limit: z.number().int().optional().openapi({ description: 'Sandbox caps: the size of that cap' }),
+    retry_after: z.number().int().optional().openapi({ description: 'Rate limits: seconds until you can try again' }),
   })
   .openapi('Problem', { description: 'Every error uses this shape (RFC 9457 problem details).' });
 

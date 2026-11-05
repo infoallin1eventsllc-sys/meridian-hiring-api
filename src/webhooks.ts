@@ -128,6 +128,9 @@ export function postJson(
         res.on('error', () => resolve({ statusCode: res.statusCode }));
       },
     );
+    // `timeout` above only fires when the socket goes quiet; this caps the whole request.
+    const deadline = setTimeout(() => req.destroy(new Error(`Timed out after ${TIMEOUT_MS / 1000}s`)), TIMEOUT_MS);
+    req.on('close', () => clearTimeout(deadline));
     req.on('timeout', () => req.destroy(new Error(`Timed out after ${TIMEOUT_MS / 1000}s`)));
     req.on('error', (err) => resolve({ error: err.message.slice(0, 300) }));
     req.end(body);
@@ -150,16 +153,22 @@ interface DueDelivery {
  * same delivery at once. Runs as the schema owner: it is a system job that
  * spans companies.
  */
-export async function processDueDeliveries(deps: Deps, opts: { limit?: number; companyId?: string } = {}) {
+export async function processDueDeliveries(
+  deps: Deps,
+  opts: { limit?: number; companyId?: string; deliveryId?: string } = {},
+) {
   const { sql, config } = deps;
   const leased = await sql<DueDelivery[]>`
     with due as (
       select d.id from hire.webhook_deliveries d
+      -- A paused endpoint keeps its queue but sends nothing until it is enabled again.
+      join hire.webhook_endpoints e on e.id = d.endpoint_id and e.enabled
       where d.status = 'pending' and d.next_attempt_at <= now()
         ${opts.companyId ? sql`and d.company_id = ${opts.companyId}` : sql``}
+        ${opts.deliveryId ? sql`and d.id = ${opts.deliveryId}` : sql``}
       order by d.next_attempt_at
       limit ${opts.limit ?? 25}
-      for update skip locked
+      for update of d skip locked
     )
     update hire.webhook_deliveries d
     set next_attempt_at = now() + interval '2 minutes'

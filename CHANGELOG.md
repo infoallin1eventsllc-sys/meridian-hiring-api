@@ -4,16 +4,27 @@
 
 Phase 1: the portfolio-grade MVP.
 
+Fixes from the 4 Nov 2026 diagnostic:
+
+- Reading now needs the `read` scope, so a write-only key can't list candidates. `GET /v1/me` stays open to every key.
+- Pausing a webhook endpoint also holds its queued retries. "Send a test event" sends just that event, and a whole send is capped at 8 seconds, not only quiet sockets.
+- Erasing a candidate deletes the webhook deliveries about them, which can carry the recruiter's note.
+- Sandbox caps hold under parallel requests (each company's capped writes take a lock), and résumé caps are checked again after the upload. Reusing a candidate by email no longer counts against the candidate cap. A résumé for a candidate erased mid-upload returns 404.
+- Sample candidates now exist before their first application. The maintenance job clears the file queue once per run, not twice.
+- The board fetches only the applications when filters or search change, so a busy visitor stays well inside the rate limit, and an older search can't overwrite a newer one. An expired sandbox returns to the welcome screen. A stage button re-enables when a move fails. Under an hour left reads "under an hour".
+- The API docs list the 409s that job, key and résumé creation can return, the extra fields errors carry (`allowed`, `existing_id`, `quota`, `retry_after` and more), the sandbox's 1 MB résumé limit, and no 401 on sandbox creation. Webhook endpoints list newest first, like every other list.
+- Local dev serves résumé links (`npm run dev:local`). A robots.txt keeps the API out of search engines.
+
 - Jobs, candidates and applications with search, filters and cursor pagination.
 - Pipeline rules (Applied → Screen → Interview → Offer → Hired / Rejected) with a stage history written by database triggers.
 - Multi-company isolation through Postgres row-level security, per-company API keys with scopes, and Supabase logins with roles.
 - Résumé uploads to private storage, checked by file contents, with five-minute download links.
 - Signed webhooks with retries, a delivery log and an SSRF guard.
-- Per-key rate limits, an append-only audit log, and one error shape (RFC 9457) everywhere.
+- Per-company rate limits, an append-only audit log, and one error shape (RFC 9457) everywhere.
 - Candidate erasure for privacy requests, including queued file deletion that survives a storage outage.
 - Self-serve 24-hour sandboxes seeded with sample data, a pipeline board, and interactive OpenAPI docs.
 - Abuse limits for public sandboxes: caps on records, files and daily changes, per-network and global creation limits, and webhook targets locked to test receivers.
-- 71 tests against real Postgres, run in GitHub Actions on every push.
+- 73 tests against real Postgres, run in GitHub Actions on every push.
 - Vercel deploy fixes: the entry file imports Hono directly, which Vercel needs to recognise the app, and / redirects to the pipeline board.
 - The Meridian Interface mark and name in the header, browser tab and docs, replacing the placeholder icon.
 - Webhook retries and sandbox clean-up run every minute on Vercel Cron, authorised with `CRON_SECRET`.

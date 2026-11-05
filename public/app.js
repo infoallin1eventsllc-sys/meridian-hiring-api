@@ -80,8 +80,23 @@ async function api(path, { method = 'GET', body, auth = true } = {}) {
     throw new ApiError(0, { detail: 'The network request failed. Check your connection.' });
   }
   const data = res.status === 204 ? null : await res.json().catch(() => null);
+  if (res.status === 401 && auth) sandboxExpired();
   if (!res.ok) throw new ApiError(res.status, data);
   return data;
+}
+
+// Sandboxes are deleted after 24 hours. If that happens while the board is open,
+// go back to the welcome screen instead of showing errors on every click.
+function sandboxExpired() {
+  if (!state.sandbox) return;
+  store.clear();
+  state.sandbox = null;
+  state.webhookId = null;
+  state.selected = null;
+  $('drawer').hidden = true;
+  $('scrim').hidden = true;
+  show('welcome');
+  $('welcome-note').textContent = 'Your last sandbox has expired. Open a new one to keep exploring.';
 }
 
 async function listAll(path) {
@@ -243,24 +258,29 @@ function renderSkeleton() {
   );
 }
 
+function appsPath() {
+  const qs = new URLSearchParams();
+  if (state.filters.job) qs.set('job_id', state.filters.job);
+  if (state.filters.q) qs.set('q', state.filters.q);
+  return `/v1/applications${qs.toString() ? `?${qs}` : ''}`;
+}
+
+// Each applications request gets a number; only the newest one may draw, so a slow
+// answer for an old search can't replace the results of the one typed after it.
+let appsRequest = 0;
+
 async function loadBoard() {
   show('board-view');
   renderSkeleton();
-  const { job, q } = state.filters;
-  const qs = new URLSearchParams();
-  if (job) qs.set('job_id', job);
-  if (q) qs.set('q', q);
+  const mine = ++appsRequest;
   try {
-    const [me, jobs, apps] = await Promise.all([
-      api('/v1/me'),
-      listAll('/v1/jobs?status=open'),
-      listAll(`/v1/applications${qs.toString() ? `?${qs}` : ''}`),
-    ]);
+    const [me, jobs, apps] = await Promise.all([api('/v1/me'), listAll('/v1/jobs?status=open'), listAll(appsPath())]);
+    if (mine !== appsRequest) return;
     state.jobs = jobs;
     state.apps = apps;
     $('company-name').textContent = me.company.name.replace(/ \(sandbox\)$/, '');
-    const hours = Math.max(0, Math.round((new Date(me.company.expires_at) - Date.now()) / 3600000));
-    $('expires').textContent = `sandbox · deleted in ${hours} h`;
+    const hours = Math.round((new Date(me.company.expires_at) - Date.now()) / 3600000);
+    $('expires').textContent = hours >= 1 ? `sandbox · deleted in ${hours} h` : 'sandbox · deleted in under an hour';
     renderFilters();
     renderKpis();
     renderBoard();
@@ -268,14 +288,41 @@ async function loadBoard() {
     loadActivity();
     if (state.selected) openDrawer(state.selected, { push: false });
   } catch (err) {
-    if (err.status === 401) {
-      store.clear();
-      state.sandbox = null;
-      show('welcome');
-      $('welcome-note').textContent = 'Your last sandbox has expired. Open a new one to keep exploring.';
-      return;
-    }
+    if (err.status === 401 || mine !== appsRequest) return;
     showFatal(err, loadBoard);
+  }
+}
+
+// Filters and search only change which applications show, so only those are fetched again.
+async function loadApps() {
+  const mine = ++appsRequest;
+  $('board').classList.add('loading');
+  $('board').setAttribute('aria-busy', 'true');
+  try {
+    const apps = await listAll(appsPath());
+    if (mine !== appsRequest) return;
+    state.apps = apps;
+    renderFilters();
+    renderKpis();
+    renderBoard();
+    if (state.selected) openDrawer(state.selected, { push: false });
+  } catch (err) {
+    if (err.status === 401 || mine !== appsRequest) return;
+    $('board').replaceChildren(
+      h(
+        'div',
+        { class: 'state span-all' },
+        h('strong', {}, "Couldn't load the applications"),
+        err.message,
+        h('br'),
+        h('button', { class: 'btn', type: 'button', onclick: loadApps }, 'Try again'),
+      ),
+    );
+  } finally {
+    if (mine === appsRequest) {
+      $('board').classList.remove('loading');
+      $('board').removeAttribute('aria-busy');
+    }
   }
 }
 
@@ -460,7 +507,8 @@ async function loadActivity() {
   try {
     if (!state.webhookId) {
       const hooks = await api('/v1/webhooks');
-      state.webhookId = hooks.data[0]?.id ?? null;
+      const demo = hooks.data.find((w) => w.url.endsWith('/demo/webhook-inbox')) ?? hooks.data[hooks.data.length - 1];
+      state.webhookId = demo?.id ?? null;
     }
     const [log, deliveries] = await Promise.all([
       api('/v1/audit-log?limit=12'),
@@ -525,8 +573,13 @@ let lastFocus = null;
 async function openDrawer(id, { push = true } = {}) {
   const app = state.apps.find((a) => a.id === id);
   if (!app) {
+    // Filtered out or erased: close a candidate drawer that is still showing them.
     state.selected = null;
     writeHash(true);
+    if (!$('drawer').hidden && !$('drawer').querySelector('form')) {
+      $('drawer').hidden = true;
+      $('scrim').hidden = true;
+    }
     return;
   }
   if ($('drawer').hidden) lastFocus = document.activeElement;
@@ -607,8 +660,9 @@ async function openDrawer(id, { push = true } = {}) {
                           ? 'Only an offer can become a hire'
                           : 'Not allowed from this stage',
                       onclick: async (e) => {
-                        e.currentTarget.disabled = true;
-                        await moveStage(current, s, noteInput.value.trim());
+                        const btn = e.currentTarget;
+                        btn.disabled = true;
+                        if (!(await moveStage(current, s, noteInput.value.trim()))) btn.disabled = false;
                       },
                     },
                     label,
@@ -1017,7 +1071,7 @@ function exportCsv() {
 function clearFilters() {
   state.filters = { job: '', q: '' };
   writeHash();
-  loadBoard();
+  loadApps();
 }
 
 // Wiring -------------------------------------------------------------------------------
@@ -1041,14 +1095,14 @@ document.addEventListener('DOMContentLoaded', () => {
   $('job-filter').addEventListener('change', (e) => {
     state.filters.job = e.target.value;
     writeHash();
-    loadBoard();
+    loadApps();
   });
   $('search').addEventListener('input', (e) => {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => {
       state.filters.q = e.target.value.trim();
       writeHash(true);
-      loadBoard();
+      loadApps();
     }, 300);
   });
   $('clear').addEventListener('click', clearFilters);
@@ -1059,7 +1113,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const before = JSON.stringify(state.filters);
     readHash();
     if (!state.sandbox) return;
-    if (JSON.stringify(state.filters) !== before) loadBoard();
+    if (JSON.stringify(state.filters) !== before) loadApps();
     else if (state.selected) openDrawer(state.selected, { push: false });
     else if (!$('drawer').hidden) closeDrawer();
   });

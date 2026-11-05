@@ -44,13 +44,13 @@ export async function deleteExpiredSandboxes(deps: FileDeps) {
     await tx`delete from hire.companies where id in ${tx(ids)}`;
     return ids.length;
   });
-  await drainPendingFiles(deps);
   return removed;
 }
 
 export async function runMaintenance(deps: FileDeps) {
   const sandboxesDeleted = await deleteExpiredSandboxes(deps);
-  const filesRetried = await drainPendingFiles(deps);
+  // One pass removes the files of sandboxes deleted just now and retries any earlier failures.
+  const filesQueued = await drainPendingFiles(deps);
   await deps.sql`delete from hire.rate_limit_counters where window_start < now() - interval '1 day'`;
-  return { sandboxes_deleted: sandboxesDeleted, files_retried: filesRetried };
+  return { sandboxes_deleted: sandboxesDeleted, files_processed: filesQueued };
 }

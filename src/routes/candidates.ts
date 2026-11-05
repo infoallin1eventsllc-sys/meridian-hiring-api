@@ -143,7 +143,7 @@ candidates.openapi(
     security,
     summary: 'Erase a candidate',
     description:
-      'Permanently deletes the candidate, their applications, stage history and résumé files. Use this for ' +
+      'Permanently deletes the candidate, their applications, stage history, résumé files and the webhook deliveries about them. Use this for ' +
       'privacy deletion requests. The audit log keeps a record that an erasure happened, without personal data.',
     request: { params: IdParam },
     responses: { 204: { description: 'Erased' }, ...problems(403, 404, 422) },
@@ -182,6 +182,11 @@ candidates.openapi(
       );
       return files.map((f) => f.storage_path);
     });
+    // Delivery payloads can carry the recruiter's note, so they go too. The API role can only
+    // read deliveries; this runs as the app login, scoped to the caller's company.
+    await sql`
+      delete from hire.webhook_deliveries
+      where company_id = ${c.get('principal').companyId} and payload->'data'->>'candidate_id' = ${id}`;
     await removeFiles({ sql, storage }, paths);
     return c.body(null, 204);
   },

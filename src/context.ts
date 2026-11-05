@@ -53,7 +53,7 @@ export function clientNetwork(c: Ctx): string {
   return `${groups.slice(0, 4).join(':')}::/64`;
 }
 
-/** Requests per minute, per API key or user. */
+/** Requests per minute, per company (all its keys and logins share one budget). */
 export const PLAN_LIMITS: Record<Plan, { requestsPerMinute: number }> = {
   sandbox: { requestsPerMinute: 60 },
   starter: { requestsPerMinute: 120 },

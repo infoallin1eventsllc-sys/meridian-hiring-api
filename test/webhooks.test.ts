@@ -104,6 +104,34 @@ describe('webhooks', () => {
     expect(await testSql()`select 1 from hire.webhook_deliveries where endpoint_id = ${hook.id}`).toHaveLength(0);
   });
 
+  it('holds queued retries while an endpoint is paused', async () => {
+    reply = 500;
+    const { t, a, hook } = await setup();
+    await apply(t, a.key, await postJob(t, a.key));
+    await t.settle();
+    await t.request('PATCH', `/v1/webhooks/${hook.id}`, { key: a.key, body: { enabled: false } });
+    const sql = testSql();
+    await sql`update hire.webhook_deliveries set next_attempt_at = now() where endpoint_id = ${hook.id}`;
+    await t.request('POST', '/internal/tick', { headers: { Authorization: 'Bearer test-cron-secret' } });
+    const [held] = await sql`select * from hire.webhook_deliveries where endpoint_id = ${hook.id}`;
+    expect(held).toMatchObject({ status: 'pending', attempts: 1 });
+  });
+
+  it('erasing a candidate removes the deliveries about them', async () => {
+    reply = 200;
+    const { t, a, hook } = await setup();
+    const app = await apply(t, a.key, await postJob(t, a.key));
+    await t.request('POST', `/v1/applications/${app.id}/stage`, {
+      key: a.key,
+      body: { to: 'rejected', note: 'Relocating for family' },
+    });
+    await t.settle();
+    expect((await t.request('DELETE', `/v1/candidates/${app.candidate_id}`, { key: a.key })).status).toBe(204);
+    const log = await t.request('GET', `/v1/webhooks/${hook.id}/deliveries`, { key: a.key });
+    expect(JSON.stringify(log.body)).not.toContain('Relocating');
+    expect(log.body.data).toHaveLength(0);
+  });
+
   it('never reveals the secret again, and stores it encrypted', async () => {
     const { t, a, hook } = await setup();
     const list = await t.request('GET', '/v1/webhooks', { key: a.key });

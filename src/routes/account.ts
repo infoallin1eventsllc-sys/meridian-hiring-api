@@ -70,7 +70,7 @@ account.openapi(
     summary: 'Create an API key',
     description: 'The full key is returned once. Give each integration its own key so you can revoke one alone.',
     request: body(ApiKeyCreate),
-    responses: { 201: json(ApiKeyWithSecret, 'The key; store it now'), ...problems(403, 422) },
+    responses: { 201: json(ApiKeyWithSecret, 'The key; store it now'), ...problems(403, 409, 422) },
   }),
   async (c) => {
     requireScope(c, 'admin');
@@ -79,11 +79,11 @@ account.openapi(
     const { sql } = c.get('deps');
     const generated = generateApiKey(p.plan === 'sandbox' ? 'sandbox' : 'live');
     const row = await withTenant(sql, tenantOf(c), async (tx) => {
+      await checkQuota(c, tx, 'api_keys');
       const [{ n }] = (await tx`select count(*) as n from hire.api_keys where revoked_at is null`) as unknown as [
         { n: number },
       ];
       if (n >= 25) throw new ApiError('conflict', 'A company can have up to 25 active keys. Revoke one first.');
-      await checkQuota(c, tx, 'api_keys');
       const [key] = await tx`
         insert into hire.api_keys (company_id, name, prefix, key_hash, scopes)
         values (${p.companyId}, ${input.name}, ${generated.prefix}, ${generated.hash}, ${input.scopes ?? ['read', 'write']})

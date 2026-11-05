@@ -92,6 +92,11 @@ describe('sandboxes', () => {
     expect(t.storage.files.size).toBe(6);
     const hooks = await t.request('GET', '/v1/webhooks', { key });
     expect(hooks.body.data[0].url).toBe('http://localhost:8787/demo/webhook-inbox');
+    // Every sample person exists before their first application.
+    const early = await testSql()`
+      select 1 from hire.applications a join hire.candidates c on c.id = a.candidate_id
+      where a.company_id = ${res.body.company.id} and a.created_at < c.created_at`;
+    expect(early).toHaveLength(0);
     // Seeding produces no webhook backlog.
     expect(
       await testSql()`select 1 from hire.webhook_deliveries where company_id = ${res.body.company.id}`,

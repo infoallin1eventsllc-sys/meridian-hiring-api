@@ -185,6 +185,17 @@ export async function seedCompany(sql: Sql, storage: Storage, companyId: string)
           updated_at = (select max(changed_at) from hire.stage_history where application_id = a.id)
         where a.id = ${app!.id}`;
     }
+    // A sample person should exist before their first application.
+    await tx`
+      update hire.candidates c
+      set created_at = least(c.created_at, a.first_applied - interval '1 day'),
+          updated_at = least(c.updated_at, a.first_applied - interval '1 day')
+      from (select candidate_id, min(created_at) as first_applied from hire.applications
+            where company_id = ${companyId} group by candidate_id) a
+      where c.id = a.candidate_id`;
+    await tx`
+      update hire.resumes r set created_at = c.created_at
+      from hire.candidates c where c.id = r.candidate_id and r.company_id = ${companyId}`;
     // Seeding is not news: drop any webhook events it produced.
     await tx`delete from hire.webhook_deliveries where company_id = ${companyId}`;
   });

@@ -18,8 +18,17 @@ export const SANDBOX_QUOTAS = {
 
 type Counted = 'jobs' | 'candidates' | 'applications' | 'resumes' | 'webhook_endpoints' | 'api_keys';
 
+/**
+ * Makes one company's capped writes wait for each other until the transaction ends, so
+ * parallel requests can't all pass a count-then-insert check. Other companies aren't affected.
+ */
+export async function lockCompanyCaps(c: Ctx, tx: Tx) {
+  await tx`select pg_advisory_xact_lock(hashtext(${'caps:' + c.get('principal').companyId}))`;
+}
+
 /** Throws 409 when a sandbox would go over its cap for `table`. Runs inside the request's tenant transaction. */
 export async function checkQuota(c: Ctx, tx: Tx, table: Counted, adding = 1) {
+  await lockCompanyCaps(c, tx);
   if (c.get('principal').plan !== 'sandbox') return;
   const filter = table === 'api_keys' ? tx`where revoked_at is null` : tx``;
   const [{ n }] = (await tx`select count(*) as n from ${tx('hire.' + table)} ${filter}`) as unknown as [{ n: number }];
@@ -37,6 +46,7 @@ export async function checkQuota(c: Ctx, tx: Tx, table: Counted, adding = 1) {
 }
 
 export async function checkResumeBytes(c: Ctx, tx: Tx, adding: number) {
+  await lockCompanyCaps(c, tx);
   if (c.get('principal').plan !== 'sandbox') return;
   const [{ total }] = (await tx`select coalesce(sum(size_bytes), 0)::bigint as total from hire.resumes`) as unknown as [
     { total: number },

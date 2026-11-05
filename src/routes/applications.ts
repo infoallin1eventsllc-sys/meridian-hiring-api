@@ -83,8 +83,11 @@ applications.openapi(
       let candidateId = input.candidate_id;
       if (input.candidate) {
         const cand = input.candidate;
-        await checkQuota(c, tx, 'candidates');
-        const [created] = await tx`
+        const [known] = await tx`select id from hire.candidates where lower(email) = lower(${cand.email})`;
+        if (!known) await checkQuota(c, tx, 'candidates');
+        const [created] = known
+          ? []
+          : await tx`
           insert into hire.candidates (company_id, first_name, last_name, email, phone, location, linkedin_url, source)
           values (${companyId}, ${cand.first_name}, ${cand.last_name}, ${cand.email}, ${cand.phone ?? null},
                   ${cand.location ?? null}, ${cand.linkedin_url ?? null}, ${cand.source ?? null})
@@ -94,7 +97,9 @@ applications.openapi(
           await audit(c, tx, 'candidate.created', { type: 'candidate', id: created.id });
           candidateId = created.id;
         } else {
-          const [existing] = await tx`select id from hire.candidates where lower(email) = ${cand.email}`;
+          const [existing] = known
+            ? [known]
+            : await tx`select id from hire.candidates where lower(email) = lower(${cand.email})`;
           candidateId = existing!.id;
         }
       } else {

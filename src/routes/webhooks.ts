@@ -68,10 +68,10 @@ webhooks.openapi(
     const { sql, config } = c.get('deps');
     const secret = generateWebhookSecret();
     const row = await withTenant(sql, tenantOf(c), async (tx) => {
+      await checkQuota(c, tx, 'webhook_endpoints');
       const [{ n }] = (await tx`select count(*) as n from hire.webhook_endpoints`) as unknown as [{ n: number }];
       if (n >= MAX_ENDPOINTS)
         throw new ApiError('conflict', `A company can have up to ${MAX_ENDPOINTS} webhook endpoints.`);
-      await checkQuota(c, tx, 'webhook_endpoints');
       const [endpoint] = await tx`
         insert into hire.webhook_endpoints (company_id, url, description, events, enabled, secret_ciphertext)
         values (${c.get('principal').companyId}, ${input.url}, ${input.description ?? null},
@@ -102,7 +102,7 @@ webhooks.openapi(
     const rows = await withTenant(
       sql,
       tenantOf(c),
-      (tx) => tx`select * from hire.webhook_endpoints order by created_at`,
+      (tx) => tx`select * from hire.webhook_endpoints order by created_at desc, id desc`,
     );
     return c.json({ object: 'list' as const, data: rows.map(webhookOut) }, 200);
   },
@@ -193,7 +193,7 @@ webhooks.openapi(
         data: { message: 'Hello from Meridian Hire' },
       })})
       returning id`;
-    await processDueDeliveries(deps, { companyId, limit: 25 });
+    await processDueDeliveries(deps, { companyId, deliveryId: delivery!.id });
     const [row] = await deps.sql`select * from hire.webhook_deliveries where id = ${delivery!.id}`;
     return c.json(deliveryOut(row!), 200);
   },

@@ -101,6 +101,9 @@ export const authenticate = createMiddleware<AppEnv>(async (c, next) => {
   const { sql } = c.get('deps');
   const principal = looksLikeApiKey(token) ? await principalFromApiKey(sql, token) : await principalFromLogin(c, token);
   c.set('principal', principal);
+  // Reading needs the read scope, so a write-only key (say, a careers page) can't list candidates.
+  // GET /v1/me stays open to every key so an integration can check what it is allowed to do.
+  if (c.req.method === 'GET' && c.req.path !== '/v1/me') requireScope(c, 'read');
 
   // One budget per company, so minting more keys doesn't buy more requests.
   const limit = PLAN_LIMITS[principal.plan].requestsPerMinute;

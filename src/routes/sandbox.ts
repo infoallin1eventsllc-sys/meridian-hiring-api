@@ -11,7 +11,7 @@ import {
   decryptSecret,
 } from '../crypto.js';
 import { ApiError } from '../errors.js';
-import { json, problems, router } from '../openapi.js';
+import { json, publicProblems, router } from '../openapi.js';
 import { Sandbox } from '../schemas.js';
 import { seedCompany } from '../seed.js';
 import { companyOut } from '../serializers.js';
@@ -37,7 +37,7 @@ sandbox.openapi(
       'and returns an admin API key for it. On the live demo this only works from a browser (bot protection): ' +
       'open the demo board first, and this page fills in its key so every endpoint can be tried. ' +
       `Sandboxes are deleted after ${LIFETIME_HOURS} hours.`,
-    responses: { 201: json(Sandbox, 'Your sandbox and its key'), ...problems(403, 503) },
+    responses: { 201: json(Sandbox, 'Your sandbox and its key'), ...publicProblems(403, 503) },
   }),
   async (c) => {
     const deps = c.get('deps');

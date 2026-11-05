@@ -63,12 +63,13 @@ resumes.openapi(
     tags,
     security,
     summary: 'Upload a résumé',
-    description: 'Send the file as multipart form data in a field named `file`. PDF, DOCX or DOC, up to 4 MB.',
+    description:
+      'Send the file as multipart form data in a field named `file`. PDF, DOCX or DOC, up to 4 MB (1 MB in a sandbox).',
     request: {
       params: IdParam,
       body: { content: { 'multipart/form-data': { schema: ResumeUpload } }, required: true },
     },
-    responses: { 201: json(Resume, 'The stored résumé'), ...problems(403, 404, 413, 415, 422) },
+    responses: { 201: json(Resume, 'The stored résumé'), ...problems(403, 404, 409, 413, 415, 422) },
   }),
   async (c) => {
     requireScope(c, 'write');
@@ -105,6 +106,9 @@ resumes.openapi(
     await storage.put(storagePath, bytes, kind.contentType);
     try {
       const row = await withTenant(sql, tenant, async (tx) => {
+        // Checked again here: other uploads may have finished while this file was being stored.
+        await checkQuota(c, tx, 'resumes');
+        await checkResumeBytes(c, tx, bytes.byteLength);
         const [resume] = await tx`
           insert into hire.resumes (company_id, candidate_id, storage_path, file_name, content_type, size_bytes, sha256)
           values (${principal.companyId}, ${id}, ${storagePath}, ${cleanFileName(file.name, kind.ext)},
@@ -123,6 +127,7 @@ resumes.openapi(
     } catch (err) {
       // The candidate may have been erased mid-upload; don't leave the file behind.
       await storage.remove([storagePath]).catch(() => {});
+      if ((err as { code?: string }).code === '23503') throw notFound('candidate');
       throw err;
     }
   },

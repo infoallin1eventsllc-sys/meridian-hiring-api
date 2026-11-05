@@ -46,8 +46,17 @@ const DESCRIPTIONS: Record<number, string> = {
 };
 
 export function problems(...codes: number[]) {
+  return problemResponses([401, 429, ...codes]);
+}
+
+/** For routes that need no key, so they can't answer 401. */
+export function publicProblems(...codes: number[]) {
+  return problemResponses([429, ...codes]);
+}
+
+function problemResponses(codes: number[]) {
   return Object.fromEntries(
-    [401, 429, ...codes].map((code) => [
+    codes.map((code) => [
       code,
       { content: { 'application/problem+json': { schema: Problem } }, description: DESCRIPTIONS[code] ?? 'Error' },
     ]),

@@ -21,7 +21,7 @@ jobs.openapi(
     security,
     summary: 'Post a job',
     request: body(JobCreate),
-    responses: { 201: json(Job, 'The new job'), ...problems(403, 422) },
+    responses: { 201: json(Job, 'The new job'), ...problems(403, 409, 422) },
   }),
   async (c) => {
     requireScope(c, 'write');

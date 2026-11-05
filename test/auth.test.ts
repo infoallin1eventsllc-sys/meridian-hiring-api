@@ -44,6 +44,12 @@ describe('authentication', () => {
       (await t.request('POST', '/v1/webhooks', { key: writer.key, body: { url: 'https://example.com/h' } })).status,
     ).toBe(403);
     expect((await t.request('GET', '/v1/audit-log', { key: writer.key })).status).toBe(403);
+    // A write-only key (a careers page, say) can apply but can't read anyone's details.
+    const careersPage = await addKey(a.companyId, ['write']);
+    const read = await t.request('GET', '/v1/candidates', { key: careersPage.key });
+    expect(read.status).toBe(403);
+    expect(read.body.detail).toContain('"read"');
+    expect((await t.request('GET', '/v1/me', { key: careersPage.key })).status).toBe(200);
   });
 
   it('creates keys that work, shows them once and stores only a hash', async () => {
