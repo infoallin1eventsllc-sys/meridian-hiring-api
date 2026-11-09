@@ -877,6 +877,131 @@ textarea.field {
   padding: 0 4px;
 }
 
+.apply-links {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.apply-links li {
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--surface);
+  display: grid;
+  gap: 6px;
+}
+.apply-link {
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+/* Apply page ---------------------------------------------------------------------- */
+main.apply {
+  max-width: 760px;
+  display: grid;
+  gap: 16px;
+}
+.demo-note {
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--accent-wash);
+  color: var(--fg);
+}
+.job-company {
+  margin: 0 0 4px;
+}
+#job h1 {
+  margin: 0 0 6px;
+  font-size: 28px;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.job-meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.job-desc {
+  margin: 16px 0 0;
+  white-space: pre-line;
+  color: var(--fg2);
+  max-width: 68ch;
+}
+.apply-form h2,
+.done h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+  font-weight: 600;
+}
+.apply-form > .muted {
+  margin: 0 0 16px;
+}
+.apply-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 12px;
+}
+.fieldset .form-hint {
+  margin: 0 0 8px;
+}
+.consent {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 8px 0 12px;
+}
+.consent input {
+  margin-top: 3px;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent-btn);
+}
+.consent input[aria-invalid='true'] {
+  outline: 2px solid var(--neg);
+  outline-offset: 2px;
+}
+.apply-status:empty {
+  display: none;
+}
+.done:focus {
+  outline: none;
+}
+.done-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.done-list li::before {
+  font-weight: 600;
+  margin-right: 8px;
+}
+.done-list li.ok::before {
+  content: '✓';
+  color: var(--pos);
+}
+.done-list li.bad::before {
+  content: '!';
+  color: var(--neg);
+}
+footer a {
+  color: inherit;
+}
+@media (max-width: 760px) {
+  .apply-grid {
+    grid-template-columns: 1fr;
+  }
+  #job h1 {
+    font-size: 24px;
+  }
+}
+
 footer {
   color: var(--muted);
   font-size: 12px;

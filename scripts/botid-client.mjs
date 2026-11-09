@@ -5,5 +5,10 @@ import { initBotId } from 'botid/client/core';
 
 // BotID's proxy only exists on Vercel (vercel.json rewrites), so local runs skip it.
 if (!['localhost', '127.0.0.1', '[::1]'].includes(location.hostname)) {
-  initBotId({ protect: [{ path: '/v1/sandbox', method: 'POST' }] });
+  initBotId({
+    protect: [
+      { path: '/v1/sandbox', method: 'POST' },
+      { path: '/v1/public/jobs/*/applications', method: 'POST' },
+    ],
+  });
 }

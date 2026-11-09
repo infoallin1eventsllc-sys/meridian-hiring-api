@@ -4,6 +4,14 @@
 
 Phase 1: the portfolio-grade MVP.
 
+Apply page (9 Nov 2026):
+
+- Every open job has a public apply page (`/apply/<job id>`). Candidates apply themselves, with no account: their details, résumé, LinkedIn, GitHub profile, a project they built (repository, live link, file) and a message to the hiring team. The application lands in Applied with source "careers page", and the stage history shows it came from the apply page.
+- New endpoints that need no key: `GET /v1/public/jobs/{id}` and `POST /v1/public/jobs/{id}/applications`. Applying returns a 30-minute upload token that can send one résumé (`POST /v1/public/uploads/resume`) and one project file (`POST /v1/public/uploads/project-file`), nothing else. Drafts, and jobs of expired sandboxes, don't exist to the public; closed jobs say so.
+- Guarded by Vercel BotID, 10 applications an hour per network, the employer's own rate limit and sandbox caps, and explicit consent to share the application.
+- The board has an "Apply pages" panel with each open job's link (open or copy), and refreshes itself when you come back to its tab.
+- Application creation, résumé storage and project files are now shared functions, so the API and the apply page follow exactly the same rules.
+
 GitHub and projects (9 Nov 2026):
 
 - Candidates can share their GitHub profile (`github_url`) when they apply, so the hiring team can look at the code they write.
@@ -33,7 +41,7 @@ Fixes from the 4 Nov 2026 diagnostic:
 - Candidate erasure for privacy requests, including queued file deletion that survives a storage outage.
 - Self-serve 24-hour sandboxes seeded with sample data, a pipeline board, and interactive OpenAPI docs.
 - Abuse limits for public sandboxes: caps on records, files and daily changes, per-network and global creation limits, and webhook targets locked to test receivers.
-- 83 tests against real Postgres, run in GitHub Actions on every push.
+- 94 tests against real Postgres, run in GitHub Actions on every push.
 - Vercel deploy fixes: the entry file imports Hono directly, which Vercel needs to recognise the app, and / redirects to the pipeline board.
 - The Meridian Interface mark and name in the header, browser tab and docs, replacing the placeholder icon.
 - Webhook retries and sandbox clean-up run every minute on Vercel Cron, authorised with `CRON_SECRET`.

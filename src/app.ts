@@ -13,6 +13,7 @@ import { applications } from './routes/applications.js';
 import { candidates } from './routes/candidates.js';
 import { jobs } from './routes/jobs.js';
 import { projects } from './routes/projects.js';
+import { publicRoutes } from './routes/public.js';
 import { resumes } from './routes/resumes.js';
 import { demoInbox, sandbox } from './routes/sandbox.js';
 import { webhooks } from './routes/webhooks.js';
@@ -170,7 +171,10 @@ export function createApp(deps: Deps) {
   );
   app.use('/v1/*', async (c, next) => {
     // Uploads have their own, larger limits on the résumé and project file routes.
-    if (c.req.method === 'POST' && /^\/v1\/(candidates\/[^/]+\/resumes|projects\/[^/]+\/file)$/.test(c.req.path))
+    if (
+      c.req.method === 'POST' &&
+      /^\/v1\/(candidates\/[^/]+\/resumes|projects\/[^/]+\/file|public\/uploads\/[a-z-]+)$/.test(c.req.path)
+    )
       return next();
     return bodyLimit({
       maxSize: 1024 * 1024,
@@ -181,16 +185,24 @@ export function createApp(deps: Deps) {
   });
   app.use('/v1/*', async (c, next) => {
     if (c.req.method === 'OPTIONS' || (c.req.path === '/v1/sandbox' && c.req.method === 'POST')) return next();
+    // The apply page needs no key; those routes do their own checks (src/routes/public.ts).
+    if (c.req.path.startsWith('/v1/public/')) return next();
     return authenticate(c, next);
   });
 
-  for (const r of [sandbox, account, jobs, candidates, applications, resumes, projects, webhooks]) app.route('/v1', r);
+  for (const r of [sandbox, account, jobs, candidates, applications, resumes, projects, webhooks, publicRoutes])
+    app.route('/v1', r);
   app.route('/', demoInbox);
 
   app.openAPIRegistry.registerComponent('securitySchemes', 'bearerAuth', {
     type: 'http',
     scheme: 'bearer',
     description: 'An API key (mh_live_… or mh_sandbox_…) or a Supabase login token.',
+  });
+  app.openAPIRegistry.registerComponent('securitySchemes', 'uploadToken', {
+    type: 'http',
+    scheme: 'bearer',
+    description: 'The upload_token returned when a candidate applies on the apply page.',
   });
   app.doc31('/openapi.json', (c) => ({
     openapi: '3.1.0',
@@ -208,6 +220,11 @@ export function createApp(deps: Deps) {
       { name: 'Candidates' },
       { name: 'Applications', description: 'Applications and how they move through the pipeline.' },
       { name: 'Résumés' },
+      { name: 'Projects', description: 'What a candidate built: GitHub repository, live link and a file.' },
+      {
+        name: 'Apply page',
+        description: "No key needed. What a job's public apply page uses, so candidates can apply themselves.",
+      },
       { name: 'Webhooks' },
       { name: 'API keys' },
       { name: 'Audit log' },
@@ -219,6 +236,8 @@ export function createApp(deps: Deps) {
   // On Vercel this function answers "/" before the static files in public/ are
   // consulted, so send visitors to the board explicitly.
   app.get('/', (c) => c.redirect('/index.html', 302));
+  // Short, shareable apply links: /apply/<job id> opens that job's apply page.
+  app.get('/apply/:id', (c) => c.redirect(`/apply.html?job=${encodeURIComponent(c.req.param('id'))}`, 302));
 
   app.get('/health', async (c) => {
     try {

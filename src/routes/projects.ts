@@ -3,7 +3,7 @@ import { createRoute, z } from '@hono/zod-openapi';
 import { bodyLimit } from 'hono/body-limit';
 import { audit } from '../audit.js';
 import { requireScope } from '../auth.js';
-import { tenantOf } from '../context.js';
+import { tenantOf, type Ctx } from '../context.js';
 import { sha256Hex } from '../crypto.js';
 import { withTenant } from '../db.js';
 import { ApiError, notFound } from '../errors.js';
@@ -51,23 +51,26 @@ projects.openapi(
   async (c) => {
     requireScope(c, 'write');
     const { id } = c.req.valid('param');
-    const input = c.req.valid('json');
-    const { sql } = c.get('deps');
-    const row = await withTenant(sql, tenantOf(c), async (tx) => {
-      const [candidate] = await tx`select id from hire.candidates where id = ${id}`;
-      if (!candidate) throw notFound('candidate');
-      await checkQuota(c, tx, 'projects');
-      const [project] = await tx`
-        insert into hire.projects (company_id, candidate_id, title, description, repo_url, live_url)
-        values (${c.get('principal').companyId}, ${id}, ${input.title}, ${input.description ?? null},
-                ${input.repo_url ?? null}, ${input.live_url ?? null})
-        returning *`;
-      await audit(c, tx, 'project.added', { type: 'project', id: project!.id }, { candidate_id: id });
-      return project!;
-    });
-    return c.json(projectOut(row), 201);
+    return c.json(projectOut(await createProject(c, id, c.req.valid('json'))), 201);
   },
 );
+
+/** Adds a project to a candidate in the caller's company. Shared with the public apply page. */
+export async function createProject(c: Ctx, candidateId: string, input: z.infer<typeof ProjectCreate>) {
+  const { sql } = c.get('deps');
+  return withTenant(sql, tenantOf(c), async (tx) => {
+    const [candidate] = await tx`select id from hire.candidates where id = ${candidateId}`;
+    if (!candidate) throw notFound('candidate');
+    await checkQuota(c, tx, 'projects');
+    const [project] = await tx`
+      insert into hire.projects (company_id, candidate_id, title, description, repo_url, live_url)
+      values (${c.get('principal').companyId}, ${candidateId}, ${input.title}, ${input.description ?? null},
+              ${input.repo_url ?? null}, ${input.live_url ?? null})
+      returning *`;
+    await audit(c, tx, 'project.added', { type: 'project', id: project!.id }, { candidate_id: candidateId });
+    return project!;
+  });
+}
 
 projects.openapi(
   createRoute({
@@ -151,74 +154,84 @@ projects.openapi(
     requireScope(c, 'write');
     const { id } = c.req.valid('param');
     const { file } = c.req.valid('form') as { file?: unknown };
-    if (!(file instanceof File)) {
-      throw new ApiError('validation_failed', 'Attach the project file in a form field named "file".', {
-        errors: [{ path: 'file', message: 'Required file' }],
-      });
-    }
-    const principal = c.get('principal');
-    const limit = principal.plan === 'sandbox' ? SANDBOX_MAX_BYTES : MAX_BYTES;
-    if (file.size === 0)
-      throw new ApiError('validation_failed', 'The file is empty.', {
-        errors: [{ path: 'file', message: 'Empty file' }],
-      });
-    if (file.size > limit)
-      throw new ApiError(
-        'payload_too_large',
-        `Project files can be up to ${limit / 1024 / 1024} MB here. Link bigger projects on GitHub.`,
-      );
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const kind = sniff(bytes);
-    if (!kind) throw new ApiError('unsupported_media_type', 'Upload a ZIP of the code, a PDF, or a PNG or JPEG image.');
-
-    const { sql, storage } = c.get('deps');
-    const tenant = tenantOf(c);
-    const candidateId = await withTenant(sql, tenant, async (tx) => {
-      const [project] = await tx`select candidate_id, size_bytes from hire.projects where id = ${id}`;
-      if (!project) throw notFound('project');
-      await checkFileBytes(c, tx, bytes.byteLength - (project.size_bytes ?? 0));
-      return project.candidate_id as string;
-    });
-
-    // Random object names: knowing a project id never reveals where its file is.
-    const storagePath = `${principal.companyId}/${candidateId}/projects/${randomUUID()}.${kind.ext}`;
-    await storage.put(storagePath, bytes, kind.contentType);
-    let replaced = null as string | null;
-    try {
-      const row = await withTenant(sql, tenant, async (tx) => {
-        const [current] = await tx`select storage_path, size_bytes from hire.projects where id = ${id} for update`;
-        if (!current) throw notFound('project');
-        // Checked again here: other uploads may have finished while this file was being stored.
-        await checkFileBytes(c, tx, bytes.byteLength - (current.size_bytes ?? 0));
-        const [project] = await tx`
-          update hire.projects
-          set storage_path = ${storagePath}, file_name = ${cleanFileName(file.name, kind.ext, 'project')},
-              content_type = ${kind.contentType}, size_bytes = ${bytes.byteLength}, sha256 = ${sha256Hex(bytes)}
-          where id = ${id}
-          returning *`;
-        if (current.storage_path) {
-          replaced = current.storage_path as string;
-          await tx`insert into hire.pending_file_deletions (storage_path, company_id)
-                   values (${replaced}, ${principal.companyId})`;
-        }
-        await audit(
-          c,
-          tx,
-          'project.file_uploaded',
-          { type: 'project', id },
-          { candidate_id: candidateId, size_bytes: bytes.byteLength },
-        );
-        return project!;
-      });
-      if (replaced) await removeFiles({ sql, storage }, [replaced]);
-      return c.json(projectOut(row), 200);
-    } catch (err) {
-      // The project or candidate may have been deleted mid-upload; don't leave the file behind.
-      await storage.remove([storagePath]).catch(() => {});
-      throw err;
-    }
+    return c.json(projectOut(await storeProjectFile(c, id, file)), 200);
   },
 );
+
+/**
+ * Checks and stores a project's file, replacing any earlier one. `onlyIfEmpty` (used by
+ * the public apply page) refuses to replace a file that is already there.
+ */
+export async function storeProjectFile(c: Ctx, id: string, file: unknown, opts: { onlyIfEmpty?: boolean } = {}) {
+  if (!(file instanceof File)) {
+    throw new ApiError('validation_failed', 'Attach the project file in a form field named "file".', {
+      errors: [{ path: 'file', message: 'Required file' }],
+    });
+  }
+  const principal = c.get('principal');
+  const limit = principal.plan === 'sandbox' ? SANDBOX_MAX_BYTES : MAX_BYTES;
+  if (file.size === 0)
+    throw new ApiError('validation_failed', 'The file is empty.', {
+      errors: [{ path: 'file', message: 'Empty file' }],
+    });
+  if (file.size > limit)
+    throw new ApiError(
+      'payload_too_large',
+      `Project files can be up to ${limit / 1024 / 1024} MB here. Link bigger projects on GitHub.`,
+    );
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const kind = sniff(bytes);
+  if (!kind) throw new ApiError('unsupported_media_type', 'Upload a ZIP of the code, a PDF, or a PNG or JPEG image.');
+
+  const { sql, storage } = c.get('deps');
+  const tenant = tenantOf(c);
+  const candidateId = await withTenant(sql, tenant, async (tx) => {
+    const [project] = await tx`select candidate_id, size_bytes from hire.projects where id = ${id}`;
+    if (!project) throw notFound('project');
+    if (opts.onlyIfEmpty && project.size_bytes !== null)
+      throw new ApiError('conflict', 'A file was already sent with this project.');
+    await checkFileBytes(c, tx, bytes.byteLength - (project.size_bytes ?? 0));
+    return project.candidate_id as string;
+  });
+
+  // Random object names: knowing a project id never reveals where its file is.
+  const storagePath = `${principal.companyId}/${candidateId}/projects/${randomUUID()}.${kind.ext}`;
+  await storage.put(storagePath, bytes, kind.contentType);
+  let replaced = null as string | null;
+  try {
+    const row = await withTenant(sql, tenant, async (tx) => {
+      const [current] = await tx`select storage_path, size_bytes from hire.projects where id = ${id} for update`;
+      if (!current) throw notFound('project');
+      // Checked again here: other uploads may have finished while this file was being stored.
+      await checkFileBytes(c, tx, bytes.byteLength - (current.size_bytes ?? 0));
+      const [project] = await tx`
+        update hire.projects
+        set storage_path = ${storagePath}, file_name = ${cleanFileName(file.name, kind.ext, 'project')},
+            content_type = ${kind.contentType}, size_bytes = ${bytes.byteLength}, sha256 = ${sha256Hex(bytes)}
+        where id = ${id}
+        returning *`;
+      if (current.storage_path) {
+        replaced = current.storage_path as string;
+        await tx`insert into hire.pending_file_deletions (storage_path, company_id)
+                 values (${replaced}, ${principal.companyId})`;
+      }
+      await audit(
+        c,
+        tx,
+        'project.file_uploaded',
+        { type: 'project', id },
+        { candidate_id: candidateId, size_bytes: bytes.byteLength },
+      );
+      return project!;
+    });
+    if (replaced) await removeFiles({ sql, storage }, [replaced]);
+    return row;
+  } catch (err) {
+    // The project or candidate may have been deleted mid-upload; don't leave the file behind.
+    await storage.remove([storagePath]).catch(() => {});
+    throw err;
+  }
+}
 
 projects.openapi(
   createRoute({

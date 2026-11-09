@@ -70,63 +70,76 @@ applications.openapi(
   }),
   async (c) => {
     requireScope(c, 'write');
-    const input = c.req.valid('json');
-    const { sql } = c.get('deps');
-    const companyId = c.get('principal').companyId;
-    const row = await withTenant(sql, tenantOf(c), async (tx) => {
-      const [job] = await tx`select id, status from hire.jobs where id = ${input.job_id}`;
-      if (!job) throw notFound('job');
-      if (job.status !== 'open')
-        throw new ApiError('conflict', `This job is ${job.status} and is not taking applications.`);
-
-      await checkQuota(c, tx, 'applications');
-      let candidateId = input.candidate_id;
-      if (input.candidate) {
-        const cand = input.candidate;
-        const [known] = await tx`select id from hire.candidates where lower(email) = lower(${cand.email})`;
-        if (!known) await checkQuota(c, tx, 'candidates');
-        const [created] = known
-          ? []
-          : await tx`
-          insert into hire.candidates (company_id, first_name, last_name, email, phone, location, linkedin_url,
-                                       github_url, source)
-          values (${companyId}, ${cand.first_name}, ${cand.last_name}, ${cand.email}, ${cand.phone ?? null},
-                  ${cand.location ?? null}, ${cand.linkedin_url ?? null}, ${cand.github_url ?? null},
-                  ${cand.source ?? null})
-          on conflict (company_id, lower(email)) do nothing
-          returning id`;
-        if (created) {
-          await audit(c, tx, 'candidate.created', { type: 'candidate', id: created.id });
-          candidateId = created.id;
-        } else {
-          const [existing] = known
-            ? [known]
-            : await tx`select id from hire.candidates where lower(email) = lower(${cand.email})`;
-          candidateId = existing!.id;
-        }
-      } else {
-        const [existing] = await tx`select id from hire.candidates where id = ${candidateId!}`;
-        if (!existing) throw notFound('candidate');
-      }
-
-      const [already] = await tx`
-        select id from hire.applications where job_id = ${input.job_id} and candidate_id = ${candidateId!}`;
-      if (already) {
-        throw new ApiError('conflict', 'This candidate has already applied to this job.', { existing_id: already.id });
-      }
-      await tx`select set_config('app.stage_note', ${input.note ?? ''}, true)`;
-      const [app] = await tx`
-        insert into hire.applications (company_id, job_id, candidate_id)
-        values (${companyId}, ${input.job_id}, ${candidateId!})
-        returning id`;
-      await audit(c, tx, 'application.created', { type: 'application', id: app!.id }, { job_id: input.job_id });
-      const [full] = await tx`${APPLICATION_SELECT(tx)} where a.id = ${app!.id}`;
-      return full!;
-    });
-    sendWebhooksSoon(c);
+    const row = await createApplication(c, c.req.valid('json'));
     return c.json(applicationOut(row), 201);
   },
 );
+
+/**
+ * Creates an application in Applied for the caller's company, reusing the candidate
+ * when the email is already known. Shared by this route and the public apply page.
+ */
+export async function createApplication(c: Ctx, input: z.infer<typeof ApplicationCreate>) {
+  const { sql } = c.get('deps');
+  const companyId = c.get('principal').companyId;
+  const row = await withTenant(sql, tenantOf(c), async (tx) => {
+    const [job] = await tx`select id, status from hire.jobs where id = ${input.job_id}`;
+    if (!job) throw notFound('job');
+    if (job.status !== 'open')
+      throw new ApiError('conflict', `This job is ${job.status} and is not taking applications.`);
+
+    await checkQuota(c, tx, 'applications');
+    let candidateId = input.candidate_id;
+    if (input.candidate) {
+      const cand = input.candidate;
+      const [known] = await tx`select id from hire.candidates where lower(email) = lower(${cand.email})`;
+      if (!known) await checkQuota(c, tx, 'candidates');
+      const [created] = known
+        ? []
+        : await tx`
+        insert into hire.candidates (company_id, first_name, last_name, email, phone, location, linkedin_url,
+                                     github_url, source)
+        values (${companyId}, ${cand.first_name}, ${cand.last_name}, ${cand.email}, ${cand.phone ?? null},
+                ${cand.location ?? null}, ${cand.linkedin_url ?? null}, ${cand.github_url ?? null},
+                ${cand.source ?? null})
+        on conflict (company_id, lower(email)) do nothing
+        returning id`;
+      if (created) {
+        await audit(c, tx, 'candidate.created', { type: 'candidate', id: created.id });
+        candidateId = created.id;
+      } else {
+        const [existing] = known
+          ? [known]
+          : await tx`select id from hire.candidates where lower(email) = lower(${cand.email})`;
+        candidateId = existing!.id;
+        // Someone who applied before without a GitHub link may add one now; an existing link is kept.
+        if (cand.github_url) {
+          await tx`update hire.candidates set github_url = ${cand.github_url}
+                   where id = ${candidateId!} and github_url is null`;
+        }
+      }
+    } else {
+      const [existing] = await tx`select id from hire.candidates where id = ${candidateId!}`;
+      if (!existing) throw notFound('candidate');
+    }
+
+    const [already] = await tx`
+      select id from hire.applications where job_id = ${input.job_id} and candidate_id = ${candidateId!}`;
+    if (already) {
+      throw new ApiError('conflict', 'This candidate has already applied to this job.', { existing_id: already.id });
+    }
+    await tx`select set_config('app.stage_note', ${input.note ?? ''}, true)`;
+    const [app] = await tx`
+      insert into hire.applications (company_id, job_id, candidate_id)
+      values (${companyId}, ${input.job_id}, ${candidateId!})
+      returning id`;
+    await audit(c, tx, 'application.created', { type: 'application', id: app!.id }, { job_id: input.job_id });
+    const [full] = await tx`${APPLICATION_SELECT(tx)} where a.id = ${app!.id}`;
+    return full!;
+  });
+  sendWebhooksSoon(c);
+  return row;
+}
 
 const StageList = z
   .string()

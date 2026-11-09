@@ -3,7 +3,7 @@ import { createRoute, z } from '@hono/zod-openapi';
 import { bodyLimit } from 'hono/body-limit';
 import { audit } from '../audit.js';
 import { requireScope } from '../auth.js';
-import { tenantOf } from '../context.js';
+import { tenantOf, type Ctx } from '../context.js';
 import { sha256Hex } from '../crypto.js';
 import { withTenant } from '../db.js';
 import { ApiError, notFound } from '../errors.js';
@@ -75,63 +75,76 @@ resumes.openapi(
     requireScope(c, 'write');
     const { id } = c.req.valid('param');
     const { file } = c.req.valid('form') as { file?: unknown };
-    if (!(file instanceof File)) {
-      throw new ApiError('validation_failed', 'Attach the résumé in a form field named "file".', {
-        errors: [{ path: 'file', message: 'Required file' }],
-      });
-    }
-    const principal = c.get('principal');
-    const limit = principal.plan === 'sandbox' ? SANDBOX_MAX_BYTES : MAX_BYTES;
-    if (file.size === 0)
-      throw new ApiError('validation_failed', 'The file is empty.', {
-        errors: [{ path: 'file', message: 'Empty file' }],
-      });
-    if (file.size > limit)
-      throw new ApiError('payload_too_large', `Résumés can be up to ${limit / 1024 / 1024} MB here.`);
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const kind = sniff(bytes);
-    if (!kind) throw new ApiError('unsupported_media_type', 'Upload a PDF or Word document (.pdf, .docx or .doc).');
-
-    const { sql, storage } = c.get('deps');
-    const tenant = tenantOf(c);
-    await withTenant(sql, tenant, async (tx) => {
-      const [candidate] = await tx`select id from hire.candidates where id = ${id}`;
-      if (!candidate) throw notFound('candidate');
-      await checkQuota(c, tx, 'resumes');
-      await checkFileBytes(c, tx, bytes.byteLength);
-    });
-
-    // Random object names: knowing a candidate id never reveals where files are.
-    const storagePath = `${principal.companyId}/${id}/${randomUUID()}.${kind.ext}`;
-    await storage.put(storagePath, bytes, kind.contentType);
-    try {
-      const row = await withTenant(sql, tenant, async (tx) => {
-        // Checked again here: other uploads may have finished while this file was being stored.
-        await checkQuota(c, tx, 'resumes');
-        await checkFileBytes(c, tx, bytes.byteLength);
-        const [resume] = await tx`
-          insert into hire.resumes (company_id, candidate_id, storage_path, file_name, content_type, size_bytes, sha256)
-          values (${principal.companyId}, ${id}, ${storagePath}, ${cleanFileName(file.name, kind.ext)},
-                  ${kind.contentType}, ${bytes.byteLength}, ${sha256Hex(bytes)})
-          returning *`;
-        await audit(
-          c,
-          tx,
-          'resume.uploaded',
-          { type: 'resume', id: resume!.id },
-          { candidate_id: id, size_bytes: bytes.byteLength },
-        );
-        return resume!;
-      });
-      return c.json(resumeOut(row), 201);
-    } catch (err) {
-      // The candidate may have been erased mid-upload; don't leave the file behind.
-      await storage.remove([storagePath]).catch(() => {});
-      if ((err as { code?: string }).code === '23503') throw notFound('candidate');
-      throw err;
-    }
+    return c.json(resumeOut(await storeResume(c, id, file)), 201);
   },
 );
+
+/**
+ * Checks and stores a résumé for a candidate in the caller's company. `onlyOneSince`
+ * (used by the public apply page) refuses a second résumé sent after that moment.
+ */
+export async function storeResume(c: Ctx, id: string, file: unknown, opts: { onlyOneSince?: Date } = {}) {
+  if (!(file instanceof File)) {
+    throw new ApiError('validation_failed', 'Attach the résumé in a form field named "file".', {
+      errors: [{ path: 'file', message: 'Required file' }],
+    });
+  }
+  const principal = c.get('principal');
+  const limit = principal.plan === 'sandbox' ? SANDBOX_MAX_BYTES : MAX_BYTES;
+  if (file.size === 0)
+    throw new ApiError('validation_failed', 'The file is empty.', {
+      errors: [{ path: 'file', message: 'Empty file' }],
+    });
+  if (file.size > limit)
+    throw new ApiError('payload_too_large', `Résumés can be up to ${limit / 1024 / 1024} MB here.`);
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const kind = sniff(bytes);
+  if (!kind) throw new ApiError('unsupported_media_type', 'Upload a PDF or Word document (.pdf, .docx or .doc).');
+
+  const { sql, storage } = c.get('deps');
+  const tenant = tenantOf(c);
+  await withTenant(sql, tenant, async (tx) => {
+    const [candidate] = await tx`select id from hire.candidates where id = ${id}`;
+    if (!candidate) throw notFound('candidate');
+    if (opts.onlyOneSince) {
+      const [sent] = await tx`
+        select 1 from hire.resumes where candidate_id = ${id} and created_at >= ${opts.onlyOneSince}`;
+      if (sent) throw new ApiError('conflict', 'A résumé was already sent with this application.');
+    }
+    await checkQuota(c, tx, 'resumes');
+    await checkFileBytes(c, tx, bytes.byteLength);
+  });
+
+  // Random object names: knowing a candidate id never reveals where files are.
+  const storagePath = `${principal.companyId}/${id}/${randomUUID()}.${kind.ext}`;
+  await storage.put(storagePath, bytes, kind.contentType);
+  try {
+    const row = await withTenant(sql, tenant, async (tx) => {
+      // Checked again here: other uploads may have finished while this file was being stored.
+      await checkQuota(c, tx, 'resumes');
+      await checkFileBytes(c, tx, bytes.byteLength);
+      const [resume] = await tx`
+        insert into hire.resumes (company_id, candidate_id, storage_path, file_name, content_type, size_bytes, sha256)
+        values (${principal.companyId}, ${id}, ${storagePath}, ${cleanFileName(file.name, kind.ext)},
+                ${kind.contentType}, ${bytes.byteLength}, ${sha256Hex(bytes)})
+        returning *`;
+      await audit(
+        c,
+        tx,
+        'resume.uploaded',
+        { type: 'resume', id: resume!.id },
+        { candidate_id: id, size_bytes: bytes.byteLength },
+      );
+      return resume!;
+    });
+    return row;
+  } catch (err) {
+    // The candidate may have been erased mid-upload; don't leave the file behind.
+    await storage.remove([storagePath]).catch(() => {});
+    if ((err as { code?: string }).code === '23503') throw notFound('candidate');
+    throw err;
+  }
+}
 
 resumes.openapi(
   createRoute({

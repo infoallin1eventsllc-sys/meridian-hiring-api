@@ -7,7 +7,8 @@ export type Scope = 'read' | 'write' | 'admin';
 export type Plan = 'sandbox' | 'starter' | 'team' | 'agency';
 
 export interface Principal {
-  type: 'api_key' | 'user';
+  /** 'public' is a candidate on the apply page: no key, limited to applying to one open job. */
+  type: 'api_key' | 'user' | 'public';
   id: string;
   companyId: string;
   plan: Plan;

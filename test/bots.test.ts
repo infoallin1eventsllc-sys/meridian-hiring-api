@@ -44,3 +44,28 @@ describe('bot protection on sandbox creation', () => {
     expect((await t.request('POST', '/v1/sandbox', { headers: ip() })).status).toBe(201);
   });
 });
+
+describe('bot protection on the apply page', () => {
+  afterEach(() => {
+    delete process.env.VERCEL;
+    verdict.isBot = false;
+  });
+
+  it('refuses scripts that try to apply, before using any allowance', async () => {
+    const { createCompany, postJob } = await import('./helpers.js');
+    process.env.VERCEL = '1';
+    verdict.isBot = true;
+    const t = makeApp();
+    const a = await createCompany();
+    const job = await postJob(t, a.key);
+    const res = await t.request('POST', `/v1/public/jobs/${job}/applications`, {
+      headers: ip(),
+      body: {
+        candidate: { first_name: 'A', last_name: 'B', email: 'bot@example.com' },
+        consent: true,
+      },
+    });
+    expect(res.status).toBe(403);
+    expect(res.headers.get('ratelimit-limit')).toBeNull();
+  });
+});

@@ -159,7 +159,7 @@ const GUIDE_STEPS = [
   [
     'add',
     'Add a candidate',
-    'the way they would apply: a résumé, their GitHub and a project they built, if you have them to hand.',
+    'with a résumé, their GitHub and a project, or open “Apply pages” and apply to a job as the candidate would.',
   ],
   ['move', 'Move someone forward', 'drag a card to another column, or open it and pick a stage.'],
   [
@@ -536,7 +536,7 @@ async function loadActivity() {
       ...log.data.map((e) => ({
         at: e.created_at,
         what: (ACTIONS[e.action] || (() => e.action))(e),
-        who: e.actor.startsWith('system') ? 'system' : 'your key',
+        who: e.actor.startsWith('system') ? 'system' : e.actor.startsWith('public') ? 'apply page' : 'your key',
       })),
       ...deliveries.data.map((d) => ({
         at: d.last_attempt_at || d.created_at,
@@ -728,7 +728,7 @@ async function openDrawer(id, { push = true } = {}) {
               h(
                 'div',
                 { class: 'when' },
-                `${timeFmt.format(new Date(e.changed_at))} · ${e.changed_by.startsWith('system') ? 'sample data' : 'your key'}`,
+                `${timeFmt.format(new Date(e.changed_at))} · ${e.changed_by.startsWith('system') ? 'sample data' : e.changed_by.startsWith('public') ? 'candidate, on the apply page' : 'your key'}`,
               ),
               e.note ? h('div', { class: 'note' }, e.note) : null,
             ),
@@ -1330,6 +1330,63 @@ function openAddForm() {
   (drawer.querySelector('input') || drawer.querySelector('button')).focus();
 }
 
+// Each open job has a public apply page. This is the link an employer puts on their
+// website or a job board; candidates fill it in themselves, with no account.
+function openApplyLinks() {
+  if ($('drawer').hidden) lastFocus = document.activeElement;
+  state.selected = null;
+  writeHash();
+  const drawer = $('drawer');
+  const link = (job) => `${location.origin}/apply/${job.id}`;
+  const copy = async (job, btn) => {
+    try {
+      await navigator.clipboard.writeText(link(job));
+      btn.textContent = 'Copied';
+      setTimeout(() => (btn.textContent = 'Copy link'), 1500);
+    } catch {
+      toast(`Copy this link: ${link(job)}`);
+    }
+  };
+  drawer.replaceChildren(
+    h(
+      'div',
+      { class: 'drawer-head' },
+      h(
+        'div',
+        {},
+        h('h2', { id: 'drawer-title' }, 'Apply pages'),
+        h('div', { class: 'muted' }, 'Where candidates apply themselves'),
+      ),
+      h('button', { class: 'btn small', type: 'button', onclick: closeDrawer }, 'Close'),
+    ),
+    h(
+      'p',
+      { class: 'muted' },
+      'Share a job’s link on your website, LinkedIn or a job board. Candidates send their details, résumé, GitHub and a project they built, and the application lands in Applied. Try one: open it and apply; when you come back here, the board shows the new application.',
+    ),
+    state.jobs.length
+      ? h(
+          'ul',
+          { class: 'apply-links' },
+          state.jobs.map((job) => {
+            const copyBtn = h('button', { class: 'btn small', type: 'button' }, 'Copy link');
+            copyBtn.addEventListener('click', () => copy(job, copyBtn));
+            return h(
+              'li',
+              {},
+              h('strong', {}, job.title),
+              h('div', { class: 'apply-link mono' }, link(job).replace(/^https?:\/\//, '')),
+              h('div', { class: 'moves' }, extLink(link(job), 'Open apply page'), copyBtn),
+            );
+          }),
+        )
+      : h('p', { class: 'muted' }, 'There are no open jobs in this sandbox.'),
+  );
+  drawer.hidden = false;
+  $('scrim').hidden = false;
+  drawer.querySelector('button').focus();
+}
+
 function closeDrawer() {
   $('drawer').hidden = true;
   $('scrim').hidden = true;
@@ -1419,6 +1476,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   $('scrim').addEventListener('click', closeDrawer);
   $('add').addEventListener('click', openAddForm);
+  $('apply-links').addEventListener('click', openApplyLinks);
   $('guide-hide').addEventListener('click', () => guide.setHidden(true));
   $('guide-show').addEventListener('click', () => guide.setHidden(false));
   $('job-filter').addEventListener('change', (e) => {
@@ -1437,6 +1495,14 @@ document.addEventListener('DOMContentLoaded', () => {
   $('clear').addEventListener('click', clearFilters);
   $('export').addEventListener('click', exportCsv);
   $('refresh-activity').addEventListener('click', loadActivity);
+  // Coming back from an apply page (or any other tab) shows what arrived meanwhile.
+  let lastShown = Date.now();
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible' || !state.sandbox || Date.now() - lastShown < 10_000) return;
+    lastShown = Date.now();
+    loadApps();
+    loadActivity();
+  });
 
   window.addEventListener('popstate', () => {
     const before = JSON.stringify(state.filters);

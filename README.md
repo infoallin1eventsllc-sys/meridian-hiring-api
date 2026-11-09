@@ -18,6 +18,7 @@ It comes with interactive docs where every endpoint can be tried in the browser,
 - **A pipeline with rules.** Applied → Screen → Interview → Offer → Hired, or Rejected at any point. Only an offer can become a hire, and Hired and Rejected are final. A refused move says why and lists the moves that are allowed.
 - **Stage history.** Every move is saved with who made it, when, and an optional note. Postgres triggers write the history, so the API can't skip it, and every company's requests run under a database role that can read it but not change it.
 - **Résumé storage.** PDF and Word uploads go to private storage. The file type is checked from the file's contents, not its name. Downloads use links that expire after five minutes.
+- **An apply page for every job.** Employers share a job's link; candidates apply themselves with their résumé, GitHub and a project, and the application lands on the board. No key or account needed, protected by bot checks, per-network limits and a one-time upload token.
 - **GitHub and projects.** Candidates can add their GitHub profile and the projects they've built: the repository, a live link and a file (a ZIP of the code, a PDF or a screenshot). The hiring team opens the code on GitHub to judge real work, not just a résumé. Project files get the same private storage and content checks as résumés, and ZIPs are never unpacked.
 - **Signed webhooks.** Each new application and stage change is sent to the firm's URL, signed with HMAC-SHA256. Failed sends are retried after 1 min, 5 min, 30 min, 2 h and 12 h, and every attempt is logged.
 - **Multi-company from day one.** Each company has its own API keys (scoped `read`, `write`, `admin`, so a careers page can hold a write-only key that can't read anyone's details) and its own logins (Supabase Auth). Postgres row-level security means a company can't see another's data, even through a query bug.
@@ -40,7 +41,7 @@ I built this with [Claude Code](https://claude.com/claude-code), Anthropic's AI 
 
 **How the work was checked**
 
-- 83 automated tests run against a real Postgres database on every push. They include tests showing one company can't read or write another company's data, even when the API code is bypassed.
+- 94 automated tests run against a real Postgres database on every push. They include tests showing one company can't read or write another company's data, even when the API code is bypassed.
 - A scheduled GitHub Actions check (`.github/workflows/uptime.yml`) tests the live demo every three hours: the API and its database, the board, the docs, bot protection, and that the every-minute job refuses callers without its secret. A failure emails the owner.
 - Lighthouse on the live demo's welcome page (4 Nov 2026), performance / accessibility / best practices / SEO: **99 / 100 / 100 / 100 on desktop, 95 / 100 / 100 / 100 on mobile**. axe finds no accessibility violations on the board, the candidate panel or the add-candidate form, in light and dark mode.
 - Before launch, a separate security-review agent audited the code against a 20-point checklist. It found no critical issues, one high and five medium. The high one was that public sandboxes had no storage limits. All six were fixed before launch except a bot check on sandbox sign-up. A second audit after going live found no critical or high issues; its main recommendation, that bot check, was then added with Vercel BotID, along with matching security headers on every response and a stricter style policy for the board.
@@ -95,7 +96,7 @@ For Supabase, also run [`db/supabase/setup.sql`](db/supabase/setup.sql) once. It
 npm test
 ```
 
-There are 83 tests across isolation, auth and key scopes, validation, the pipeline rules, résumés, GitHub links and projects, webhooks, rate limits, the audit log, sandboxes, abuse limits, bot protection, the API reference and the committed BotID script. They run against a real Postgres: a throwaway one locally, and a `postgres:17` service in CI. GitHub Actions runs formatting, type checks and the full suite on every push.
+There are 94 tests across isolation, auth and key scopes, validation, the pipeline rules, résumés, GitHub links and projects, the public apply page, webhooks, rate limits, the audit log, sandboxes, abuse limits, bot protection, the API reference and the committed BotID script. They run against a real Postgres: a throwaway one locally, and a `postgres:17` service in CI. GitHub Actions runs formatting, type checks and the full suite on every push.
 
 ## Project layout
 

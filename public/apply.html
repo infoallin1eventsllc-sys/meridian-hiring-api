@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Apply · Meridian Interface Hire</title>
+    <meta
+      name="description"
+      content="Apply for a job with your résumé, your GitHub profile and a project you built. Powered by Meridian Hire."
+    />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="/favicon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/botid.js" defer></script>
+    <script src="/apply.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <span class="brand">
+        <img src="/brand/meridian-mark.png" width="30" height="29" alt="" />
+        <span class="brand-name" id="company-name">Careers</span>
+        <span class="brand-product">Apply</span>
+      </span>
+    </header>
+
+    <main id="main" class="apply">
+      <p class="demo-note" id="demo-note" hidden>
+        <strong>This is a demo job.</strong> It belongs to a practice company that is deleted within 24 hours. Please
+        use made-up details, not your real personal information.
+      </p>
+
+      <section class="panel" id="loading" aria-busy="true">
+        <div class="skel block"></div>
+      </section>
+
+      <section class="panel state" id="problem" hidden>
+        <strong id="problem-title">This job link isn't working</strong>
+        <span id="problem-text">Check the link you were sent, or ask the employer for a new one.</span>
+      </section>
+
+      <section class="panel" id="job" hidden>
+        <p class="job-company muted" id="job-company"></p>
+        <h1 id="job-title"></h1>
+        <p class="job-meta mono" id="job-meta"></p>
+        <p class="job-desc" id="job-desc" hidden></p>
+      </section>
+
+      <form class="panel form apply-form" id="apply-form" novalidate hidden>
+        <h2>Apply for this job</h2>
+        <p class="muted">Fields marked optional can be left empty.</p>
+
+        <div class="apply-grid">
+          <label class="form-row">
+            <span class="form-label">First name</span>
+            <input
+              class="field full"
+              name="first_name"
+              type="text"
+              maxlength="100"
+              autocomplete="given-name"
+              required
+            />
+          </label>
+          <label class="form-row">
+            <span class="form-label">Last name</span>
+            <input
+              class="field full"
+              name="last_name"
+              type="text"
+              maxlength="100"
+              autocomplete="family-name"
+              required
+            />
+          </label>
+        </div>
+        <label class="form-row">
+          <span class="form-label">Email</span>
+          <input class="field full" name="email" type="email" maxlength="254" autocomplete="email" required />
+        </label>
+        <div class="apply-grid">
+          <label class="form-row">
+            <span class="form-label">Phone (optional)</span>
+            <input class="field full" name="phone" type="tel" maxlength="40" autocomplete="tel" />
+          </label>
+          <label class="form-row">
+            <span class="form-label">City (optional)</span>
+            <input class="field full" name="location" type="text" maxlength="200" autocomplete="address-level2" />
+          </label>
+        </div>
+        <label class="form-row">
+          <span class="form-label">Résumé</span>
+          <input
+            class="field full file"
+            name="resume"
+            type="file"
+            accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            required
+          />
+          <span class="form-hint" id="resume-hint">PDF or Word.</span>
+        </label>
+        <label class="form-row">
+          <span class="form-label">LinkedIn (optional)</span>
+          <input
+            class="field full"
+            name="linkedin_url"
+            type="url"
+            maxlength="500"
+            placeholder="https://www.linkedin.com/in/…"
+          />
+        </label>
+        <label class="form-row">
+          <span class="form-label">GitHub profile (optional)</span>
+          <input
+            class="field full"
+            name="github_url"
+            type="text"
+            maxlength="500"
+            autocomplete="off"
+            placeholder="github.com/username"
+          />
+          <span class="form-hint">So the hiring team can see the code you write.</span>
+        </label>
+
+        <fieldset class="fieldset">
+          <legend>A project you built (optional)</legend>
+          <p class="form-hint">Show your best work. The hiring team can open the code on GitHub.</p>
+          <label class="form-row">
+            <span class="form-label">Project name</span>
+            <input class="field full" name="project_title" type="text" maxlength="200" autocomplete="off" />
+          </label>
+          <label class="form-row">
+            <span class="form-label">GitHub repository</span>
+            <input
+              class="field full"
+              name="project_repo"
+              type="text"
+              maxlength="500"
+              autocomplete="off"
+              placeholder="github.com/username/project"
+            />
+          </label>
+          <label class="form-row">
+            <span class="form-label">Live link (optional)</span>
+            <input class="field full" name="project_live" type="url" maxlength="500" placeholder="https://" />
+          </label>
+          <label class="form-row">
+            <span class="form-label">What it is (optional)</span>
+            <textarea class="field full" name="project_description" maxlength="2000" rows="3"></textarea>
+          </label>
+          <label class="form-row">
+            <span class="form-label">Project file (optional)</span>
+            <input
+              class="field full file"
+              name="project_file"
+              type="file"
+              accept=".zip,.pdf,.png,.jpg,.jpeg,application/zip,application/pdf,image/png,image/jpeg"
+            />
+            <span class="form-hint" id="project-hint">A ZIP of the code, a PDF or a screenshot.</span>
+          </label>
+        </fieldset>
+
+        <label class="form-row">
+          <span class="form-label">Message to the hiring team (optional)</span>
+          <textarea class="field full" name="message" maxlength="1000" rows="3"></textarea>
+        </label>
+
+        <label class="consent">
+          <input type="checkbox" name="consent" required />
+          <span id="consent-text">I agree to share my application with this employer.</span>
+        </label>
+
+        <div class="form-errors" id="errors" role="alert" hidden></div>
+        <p class="apply-status muted" id="status" role="status" aria-live="polite"></p>
+        <div class="moves">
+          <button class="btn primary" id="submit" type="submit">Send application</button>
+        </div>
+      </form>
+
+      <section class="panel done" id="done" hidden tabindex="-1">
+        <h2 id="done-title">Application sent</h2>
+        <p id="done-text"></p>
+        <ul class="done-list" id="done-list"></ul>
+        <p class="fine" id="done-demo" hidden>
+          Demo: go back to the pipeline board. Your application is in Applied, with everything you sent.
+        </p>
+      </section>
+    </main>
+    <footer>Powered by Meridian Hire, by <a href="https://meridianinterface.com">Meridian Interface</a></footer>
+  </body>
+</html>

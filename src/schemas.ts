@@ -297,6 +297,49 @@ export const ProjectUpload = z
   })
   .openapi('ProjectUpload');
 
+// Public apply page ---------------------------------------------------------------
+
+export const PublicJob = z
+  .object({
+    id: uuid(),
+    object: z.literal('public_job'),
+    title: z.string(),
+    department: z.string().nullable(),
+    location: z.string().nullable(),
+    employment_type: EmploymentType,
+    remote: z.boolean(),
+    description: z.string().nullable(),
+    company: z.object({ name: z.string(), sandbox: z.boolean() }),
+    accepting_applications: z.boolean(),
+  })
+  .openapi('PublicJob');
+
+export const PublicApplication = z
+  .object({
+    candidate: CandidateCreate.omit({ source: true }),
+    project: ProjectCreate.optional().openapi({ description: 'Something they built, to show their work' }),
+    message: optionalText(1000).openapi({ description: 'A note to the hiring team; saved with the application' }),
+    consent: z.literal(true, { error: 'Agree to share your application with the employer' }),
+  })
+  .strict()
+  .openapi('PublicApplication');
+
+export const PublicApplicationReceipt = z
+  .object({
+    object: z.literal('public_application'),
+    application_id: uuid(),
+    project_id: uuid().nullable(),
+    job_title: z.string(),
+    company_name: z.string(),
+    upload_token: z.string().openapi({
+      description:
+        'Lets this applicant send one résumé and one project file for this application, for 30 minutes. ' +
+        'Send it as `Authorization: Bearer <upload_token>` to the two upload endpoints.',
+    }),
+    upload_token_expires_at: timestamp,
+  })
+  .openapi('PublicApplicationReceipt');
+
 export const DownloadLink = z
   .object({ url: z.url(), expires_at: timestamp })
   .openapi('DownloadLink', { description: 'A private link that stops working after five minutes.' });
@@ -414,7 +457,7 @@ export const Company = z
 export const Me = z
   .object({
     company: Company,
-    principal: z.object({ type: z.enum(['api_key', 'user']), id: uuid(), scopes: z.array(Scope) }),
+    principal: z.object({ type: z.enum(['api_key', 'user', 'public']), id: uuid(), scopes: z.array(Scope) }),
     rate_limit: z.object({ requests_per_minute: z.number().int() }),
   })
   .openapi('Me');
