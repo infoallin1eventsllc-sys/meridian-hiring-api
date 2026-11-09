@@ -33,9 +33,11 @@ candidates.openapi(
     const row = await withTenant(sql, tenantOf(c), async (tx) => {
       await checkQuota(c, tx, 'candidates');
       const [candidate] = await tx`
-        insert into hire.candidates (company_id, first_name, last_name, email, phone, location, linkedin_url, source)
+        insert into hire.candidates (company_id, first_name, last_name, email, phone, location, linkedin_url,
+                                     github_url, source)
         values (${c.get('principal').companyId}, ${input.first_name}, ${input.last_name}, ${input.email},
-                ${input.phone ?? null}, ${input.location ?? null}, ${input.linkedin_url ?? null}, ${input.source ?? null})
+                ${input.phone ?? null}, ${input.location ?? null}, ${input.linkedin_url ?? null},
+                ${input.github_url ?? null}, ${input.source ?? null})
         on conflict (company_id, lower(email)) do nothing
         returning *`;
       if (!candidate) {
@@ -143,7 +145,8 @@ candidates.openapi(
     security,
     summary: 'Erase a candidate',
     description:
-      'Permanently deletes the candidate, their applications, stage history, résumé files and the webhook deliveries about them. Use this for ' +
+      'Permanently deletes the candidate, their applications, stage history, résumés, projects and project files, and the webhook ' +
+      'deliveries about them. Use this for ' +
       'privacy deletion requests. The audit log keeps a record that an erasure happened, without personal data.',
     request: { params: IdParam },
     responses: { 204: { description: 'Erased' }, ...problems(403, 404, 422) },
@@ -155,9 +158,13 @@ candidates.openapi(
     const paths = await withTenant(sql, tenantOf(c), async (tx) => {
       const [candidate] = await tx`select id from hire.candidates where id = ${id} for update`;
       if (!candidate) throw notFound('candidate');
-      const files = await tx<
+      const resumeFiles = await tx<
         { storage_path: string }[]
       >`select storage_path from hire.resumes where candidate_id = ${id}`;
+      const projects = await tx<
+        { storage_path: string | null }[]
+      >`select storage_path from hire.projects where candidate_id = ${id}`;
+      const files = [...resumeFiles, ...projects.filter((p): p is { storage_path: string } => p.storage_path !== null)];
       const [{ applications }] = (await tx`
         select count(*) as applications from hire.applications where candidate_id = ${id}`) as unknown as [
         { applications: number },
@@ -177,7 +184,8 @@ candidates.openapi(
         { type: 'candidate', id },
         {
           applications_deleted: applications,
-          resumes_deleted: files.length,
+          resumes_deleted: resumeFiles.length,
+          projects_deleted: projects.length,
         },
       );
       return files.map((f) => f.storage_path);

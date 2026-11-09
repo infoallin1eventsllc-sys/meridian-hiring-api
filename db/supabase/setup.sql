@@ -12,12 +12,16 @@
 revoke all on schema hire, hire_meta from anon, authenticated;
 revoke all on all tables in schema hire from anon, authenticated;
 
--- 1. Private bucket for résumés: 4 MB cap, PDF and Word only, never public.
+-- 1. Private bucket for résumés and project files: 4 MB cap, never public.
+--    Résumés: PDF and Word. Project files: ZIP, PDF, PNG and JPEG.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('resumes', 'resumes', false, 4194304, array[
   'application/pdf',
   'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/zip',
+  'image/png',
+  'image/jpeg'
 ])
 on conflict (id) do update
   set public = false, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;

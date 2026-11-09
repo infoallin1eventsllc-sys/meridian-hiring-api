@@ -9,14 +9,16 @@ export const SANDBOX_QUOTAS = {
   candidates: 200,
   applications: 500,
   resumes: 25,
-  resumeBytes: 20 * 1024 * 1024,
+  projects: 50,
+  /** Résumés and project files together. */
+  fileBytes: 20 * 1024 * 1024,
   webhook_endpoints: 3,
   api_keys: 5,
   /** Writes (anything but GET) per sandbox per day. Bounds audit and webhook rows too. */
   writesPerDay: 2000,
 };
 
-type Counted = 'jobs' | 'candidates' | 'applications' | 'resumes' | 'webhook_endpoints' | 'api_keys';
+type Counted = 'jobs' | 'candidates' | 'applications' | 'resumes' | 'projects' | 'webhook_endpoints' | 'api_keys';
 
 /**
  * Makes one company's capped writes wait for each other until the transaction ends, so
@@ -45,19 +47,20 @@ export async function checkQuota(c: Ctx, tx: Tx, table: Counted, adding = 1) {
   }
 }
 
-export async function checkResumeBytes(c: Ctx, tx: Tx, adding: number) {
+/** Throws 409 when a sandbox's résumés and project files would go over its storage cap. */
+export async function checkFileBytes(c: Ctx, tx: Tx, adding: number) {
   await lockCompanyCaps(c, tx);
   if (c.get('principal').plan !== 'sandbox') return;
-  const [{ total }] = (await tx`select coalesce(sum(size_bytes), 0)::bigint as total from hire.resumes`) as unknown as [
-    { total: number },
-  ];
-  if (total + adding > SANDBOX_QUOTAS.resumeBytes) {
+  const [{ total }] = (await tx`
+    select (select coalesce(sum(size_bytes), 0) from hire.resumes)
+         + (select coalesce(sum(size_bytes), 0) from hire.projects) as total`) as unknown as [{ total: number }];
+  if (Number(total) + adding > SANDBOX_QUOTAS.fileBytes) {
     throw new ApiError(
       'conflict',
-      'This sandbox has used its 20 MB of résumé storage. Start a new sandbox to keep exploring.',
+      'This sandbox has used its 20 MB of file storage. Start a new sandbox to keep exploring.',
       {
-        quota: 'resume_bytes',
-        limit: SANDBOX_QUOTAS.resumeBytes,
+        quota: 'file_bytes',
+        limit: SANDBOX_QUOTAS.fileBytes,
       },
     );
   }

@@ -40,6 +40,9 @@ export async function deleteExpiredSandboxes(deps: FileDeps) {
     await tx`
       insert into hire.pending_file_deletions (storage_path, company_id)
       select storage_path, company_id from hire.resumes where company_id in ${tx(ids)}
+      union all
+      select storage_path, company_id from hire.projects
+      where company_id in ${tx(ids)} and storage_path is not null
       on conflict do nothing`;
     await tx`delete from hire.companies where id in ${tx(ids)}`;
     return ids.length;

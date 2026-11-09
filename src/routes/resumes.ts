@@ -11,7 +11,7 @@ import { removeFiles } from '../maintenance.js';
 import { json, problems, router, security } from '../openapi.js';
 import { DownloadLink, IdParam, Resume, ResumeUpload } from '../schemas.js';
 import { resumeOut } from '../serializers.js';
-import { checkQuota, checkResumeBytes } from '../quotas.js';
+import { checkQuota, checkFileBytes } from '../quotas.js';
 
 const tags = ['Résumés'];
 export const resumes = router();
@@ -36,13 +36,13 @@ function sniff(bytes: Uint8Array): { contentType: string; ext: string } | undefi
   return undefined;
 }
 
-function cleanFileName(name: string, ext: string) {
+export function cleanFileName(name: string, ext: string, fallback = 'resume') {
   const base =
     (name.split(/[\\/]/).pop() ?? '')
       .replace(/\.[^.]*$/, '')
       .replace(/[^\p{L}\p{N} ._-]+/gu, '')
       .trim()
-      .slice(0, 120) || 'resume';
+      .slice(0, 120) || fallback;
   return `${base}.${ext}`;
 }
 
@@ -98,7 +98,7 @@ resumes.openapi(
       const [candidate] = await tx`select id from hire.candidates where id = ${id}`;
       if (!candidate) throw notFound('candidate');
       await checkQuota(c, tx, 'resumes');
-      await checkResumeBytes(c, tx, bytes.byteLength);
+      await checkFileBytes(c, tx, bytes.byteLength);
     });
 
     // Random object names: knowing a candidate id never reveals where files are.
@@ -108,7 +108,7 @@ resumes.openapi(
       const row = await withTenant(sql, tenant, async (tx) => {
         // Checked again here: other uploads may have finished while this file was being stored.
         await checkQuota(c, tx, 'resumes');
-        await checkResumeBytes(c, tx, bytes.byteLength);
+        await checkFileBytes(c, tx, bytes.byteLength);
         const [resume] = await tx`
           insert into hire.resumes (company_id, candidate_id, storage_path, file_name, content_type, size_bytes, sha256)
           values (${principal.companyId}, ${id}, ${storagePath}, ${cleanFileName(file.name, kind.ext)},

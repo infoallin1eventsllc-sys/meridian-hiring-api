@@ -88,9 +88,11 @@ applications.openapi(
         const [created] = known
           ? []
           : await tx`
-          insert into hire.candidates (company_id, first_name, last_name, email, phone, location, linkedin_url, source)
+          insert into hire.candidates (company_id, first_name, last_name, email, phone, location, linkedin_url,
+                                       github_url, source)
           values (${companyId}, ${cand.first_name}, ${cand.last_name}, ${cand.email}, ${cand.phone ?? null},
-                  ${cand.location ?? null}, ${cand.linkedin_url ?? null}, ${cand.source ?? null})
+                  ${cand.location ?? null}, ${cand.linkedin_url ?? null}, ${cand.github_url ?? null},
+                  ${cand.source ?? null})
           on conflict (company_id, lower(email)) do nothing
           returning id`;
         if (created) {

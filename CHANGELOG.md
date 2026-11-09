@@ -4,6 +4,15 @@
 
 Phase 1: the portfolio-grade MVP.
 
+GitHub and projects (9 Nov 2026):
+
+- Candidates can share their GitHub profile (`github_url`) when they apply, so the hiring team can look at the code they write.
+- New **projects** for each candidate: a name, what it is, the GitHub repository, a live link and an optional file (a ZIP of the code, a PDF or a PNG/JPEG screenshot, up to 4 MB; 2 MB in a sandbox). Files are checked by their contents, stored privately and opened through five-minute links; ZIPs are never unpacked. Endpoints: `POST/GET /v1/candidates/{id}/projects`, `PATCH/DELETE /v1/projects/{id}`, `POST /v1/projects/{id}/file`, `GET /v1/projects/{id}/download`.
+- The board's "Add a candidate" form takes a GitHub profile and a project. The candidate panel shows the GitHub link, each project with "View code on GitHub", the live site and the file, and lets the team add a GitHub profile or a project later.
+- Erasing a candidate also removes their projects and project files; expired sandboxes clean up project files too.
+- The sandbox storage cap (20 MB) now covers résumés and project files together; its 409 reports `quota: "file_bytes"` (was `resume_bytes`).
+- Migration `0004_github_and_projects.sql`. On Supabase, the private bucket now also accepts ZIP, PNG and JPEG (see `db/supabase/setup.sql`).
+
 Fixes from the 4 Nov 2026 diagnostic:
 
 - Reading now needs the `read` scope, so a write-only key can't list candidates. `GET /v1/me` stays open to every key.
@@ -24,7 +33,7 @@ Fixes from the 4 Nov 2026 diagnostic:
 - Candidate erasure for privacy requests, including queued file deletion that survives a storage outage.
 - Self-serve 24-hour sandboxes seeded with sample data, a pipeline board, and interactive OpenAPI docs.
 - Abuse limits for public sandboxes: caps on records, files and daily changes, per-network and global creation limits, and webhook targets locked to test receivers.
-- 73 tests against real Postgres, run in GitHub Actions on every push.
+- 83 tests against real Postgres, run in GitHub Actions on every push.
 - Vercel deploy fixes: the entry file imports Hono directly, which Vercel needs to recognise the app, and / redirects to the pipeline board.
 - The Meridian Interface mark and name in the header, browser tab and docs, replacing the placeholder icon.
 - Webhook retries and sandbox clean-up run every minute on Vercel Cron, authorised with `CRON_SECRET`.

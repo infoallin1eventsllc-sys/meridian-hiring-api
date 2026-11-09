@@ -827,6 +827,56 @@ textarea.field {
   margin: 0 0 8px;
 }
 
+/* GitHub and projects ----------------------------------------------------------- */
+.dl dd .link {
+  color: var(--accent);
+  text-decoration: none;
+}
+.dl dd .link:hover {
+  text-decoration: underline;
+}
+.inline-form {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 0;
+}
+.projects {
+  display: grid;
+  gap: 10px;
+}
+.project {
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--surface);
+}
+.project h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.project-desc {
+  margin: 0 0 6px;
+  color: var(--fg2);
+}
+.project-repo {
+  font: 400 12px var(--mono);
+  color: var(--muted);
+  margin-bottom: 8px;
+  overflow-wrap: anywhere;
+}
+.fieldset {
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  padding: 10px 12px 6px;
+  margin: 4px 0 10px;
+}
+.fieldset legend {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 0 4px;
+}
+
 footer {
   color: var(--muted);
   font-size: 12px;

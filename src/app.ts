@@ -12,6 +12,7 @@ import { account } from './routes/account.js';
 import { applications } from './routes/applications.js';
 import { candidates } from './routes/candidates.js';
 import { jobs } from './routes/jobs.js';
+import { projects } from './routes/projects.js';
 import { resumes } from './routes/resumes.js';
 import { demoInbox, sandbox } from './routes/sandbox.js';
 import { webhooks } from './routes/webhooks.js';
@@ -28,8 +29,9 @@ const SCALAR = {
 };
 
 const DOCS_INTRO = `
-A hiring pipeline API for recruiting teams. Companies post **jobs**, **candidates** apply and upload a **résumé**,
-and each **application** moves through *Applied → Screen → Interview → Offer → Hired / Rejected*. Every move is
+A hiring pipeline API for recruiting teams. Companies post **jobs**, **candidates** apply with a **résumé**, their
+GitHub profile and the **projects** they've built (a GitHub repository, a live link, a ZIP of the code), and each
+**application** moves through *Applied → Screen → Interview → Offer → Hired / Rejected*. Every move is
 saved to a stage history and sent to your **webhooks**.
 
 ## Try it in two steps
@@ -68,7 +70,7 @@ Every error has the same shape, with \`Content-Type: application/problem+json\`:
 | \`conflict\` | 409 | Clashes with existing data, e.g. a duplicate email |
 | \`invalid_transition\` | 409 | That stage change isn't allowed; \`allowed\` lists the options |
 | \`payload_too_large\` | 413 | The upload is too big |
-| \`unsupported_media_type\` | 415 | The file isn't a PDF or Word document |
+| \`unsupported_media_type\` | 415 | That type of file isn't accepted here (résumés: PDF or Word; project files: ZIP, PDF, PNG or JPEG) |
 | \`validation_failed\` | 422 | Fields are missing or wrong; see \`errors\` |
 | \`rate_limited\` | 429 | Too many requests; wait \`Retry-After\` seconds |
 
@@ -167,8 +169,9 @@ export function createApp(deps: Deps) {
     }),
   );
   app.use('/v1/*', async (c, next) => {
-    // Uploads have their own, larger limit on the résumé route.
-    if (c.req.method === 'POST' && /^\/v1\/candidates\/[^/]+\/resumes$/.test(c.req.path)) return next();
+    // Uploads have their own, larger limits on the résumé and project file routes.
+    if (c.req.method === 'POST' && /^\/v1\/(candidates\/[^/]+\/resumes|projects\/[^/]+\/file)$/.test(c.req.path))
+      return next();
     return bodyLimit({
       maxSize: 1024 * 1024,
       onError: () => {
@@ -181,7 +184,7 @@ export function createApp(deps: Deps) {
     return authenticate(c, next);
   });
 
-  for (const r of [sandbox, account, jobs, candidates, applications, resumes, webhooks]) app.route('/v1', r);
+  for (const r of [sandbox, account, jobs, candidates, applications, resumes, projects, webhooks]) app.route('/v1', r);
   app.route('/', demoInbox);
 
   app.openAPIRegistry.registerComponent('securitySchemes', 'bearerAuth', {

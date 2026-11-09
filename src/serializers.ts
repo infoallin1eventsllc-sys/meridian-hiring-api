@@ -26,6 +26,7 @@ export const candidateOut = (r: Row) => ({
   phone: r.phone as string | null,
   location: r.location as string | null,
   linkedin_url: r.linkedin_url as string | null,
+  github_url: r.github_url as string | null,
   source: r.source as string | null,
   created_at: r.created_at as Date,
   updated_at: r.updated_at as Date,
@@ -69,6 +70,26 @@ export const resumeOut = (r: Row) => ({
   size_bytes: r.size_bytes as number,
   sha256: r.sha256 as string,
   created_at: r.created_at as Date,
+});
+
+export const projectOut = (r: Row) => ({
+  id: r.id as string,
+  object: 'project' as const,
+  candidate_id: r.candidate_id as string,
+  title: r.title as string,
+  description: r.description as string | null,
+  repo_url: r.repo_url as string | null,
+  live_url: r.live_url as string | null,
+  file: r.storage_path
+    ? {
+        file_name: r.file_name as string,
+        content_type: r.content_type as string,
+        size_bytes: r.size_bytes as number,
+        sha256: r.sha256 as string,
+      }
+    : null,
+  created_at: r.created_at as Date,
+  updated_at: r.updated_at as Date,
 });
 
 export const webhookOut = (r: Row) => ({

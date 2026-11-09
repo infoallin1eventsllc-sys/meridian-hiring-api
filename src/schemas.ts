@@ -10,6 +10,11 @@ export type StageName = (typeof STAGES)[number];
 const trimmed = (max: number) => z.string().trim().min(1).max(max);
 const optionalText = (max: number) => z.string().trim().max(max).nullable().optional();
 const timestamp = z.iso.datetime().openapi({ example: '2026-11-03T15:04:05.000Z' });
+// GitHub links are checked for shape only: a profile is github.com/<user>, a
+// repository is github.com/<user>/<repo> with an optional path after it.
+const GITHUB_PROFILE = /^https:\/\/github\.com\/[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/?$/;
+const GITHUB_REPO = /^https:\/\/github\.com\/[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/[A-Za-z0-9._-]{1,100}(?:\/[^\s]*)?$/;
+const webLink = z.url({ protocol: /^https?$/ }).max(500);
 const uuid = (example?: string) => z.uuid().openapi({ example: example ?? '5b3f8a5e-2c1d-4f7a-9a6e-0d1c2b3a4f5e' });
 
 export const IdParam = z.object({
@@ -106,6 +111,7 @@ export const Candidate = z
     phone: z.string().nullable(),
     location: z.string().nullable(),
     linkedin_url: z.string().nullable(),
+    github_url: z.string().nullable(),
     source: z.string().nullable(),
     created_at: timestamp,
     updated_at: timestamp,
@@ -131,6 +137,14 @@ export const CandidateCreate = z
       .nullable()
       .optional()
       .openapi({ example: 'https://www.linkedin.com/in/jordan-avery' }),
+    github_url: z
+      .string()
+      .trim()
+      .max(500)
+      .regex(GITHUB_PROFILE, 'Use a GitHub profile link, like https://github.com/username')
+      .nullable()
+      .optional()
+      .openapi({ example: 'https://github.com/jordan-avery' }),
     source: optionalText(100).openapi({ example: 'referral' }),
   })
   .strict()
@@ -228,6 +242,60 @@ export const ResumeUpload = z
     file: z.any().openapi({ type: 'string', format: 'binary', description: 'PDF or Word document, up to 4 MB' }),
   })
   .openapi('ResumeUpload');
+
+// Projects -------------------------------------------------------------------------
+
+export const Project = z
+  .object({
+    id: uuid(),
+    object: z.literal('project'),
+    candidate_id: uuid(),
+    title: z.string(),
+    description: z.string().nullable(),
+    repo_url: z.string().nullable().openapi({ description: 'The GitHub repository with the code' }),
+    live_url: z.string().nullable().openapi({ description: 'Where the finished project can be seen' }),
+    file: z
+      .object({ file_name: z.string(), content_type: z.string(), size_bytes: z.number().int(), sha256: z.string() })
+      .nullable()
+      .openapi({ description: 'The uploaded file, if any. Open it with GET /v1/projects/{id}/download.' }),
+    created_at: timestamp,
+    updated_at: timestamp,
+  })
+  .openapi('Project');
+
+export const ProjectCreate = z
+  .object({
+    title: trimmed(200).openapi({ example: 'Shift scheduler' }),
+    description: optionalText(2000).openapi({
+      example: 'A scheduling app for a 40-person clinic. React front end, Postgres, deployed on Vercel.',
+    }),
+    repo_url: z
+      .string()
+      .trim()
+      .max(500)
+      .regex(GITHUB_REPO, 'Use a GitHub repository link, like https://github.com/username/project')
+      .nullable()
+      .optional()
+      .openapi({ example: 'https://github.com/jordan-avery/shift-scheduler' }),
+    live_url: webLink.nullable().optional().openapi({ example: 'https://shift-scheduler.example.com' }),
+  })
+  .strict()
+  .openapi('ProjectCreate');
+
+export const ProjectUpdate = ProjectCreate.partial()
+  .strict()
+  .refine((v) => Object.keys(v).length > 0, { message: 'Send at least one field to change' })
+  .openapi('ProjectUpdate');
+
+export const ProjectUpload = z
+  .object({
+    file: z.any().openapi({
+      type: 'string',
+      format: 'binary',
+      description: 'ZIP of the code, PDF, PNG or JPEG, up to 4 MB',
+    }),
+  })
+  .openapi('ProjectUpload');
 
 export const DownloadLink = z
   .object({ url: z.url(), expires_at: timestamp })

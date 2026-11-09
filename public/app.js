@@ -156,7 +156,11 @@ function daysSince(iso) {
 // kept per sandbox in this browser only.
 const GUIDE_KEY = 'meridian-hire.guide';
 const GUIDE_STEPS = [
-  ['add', 'Add a candidate', 'the way they would apply, with a résumé if you have one to hand.'],
+  [
+    'add',
+    'Add a candidate',
+    'the way they would apply: a résumé, their GitHub and a project they built, if you have them to hand.',
+  ],
   ['move', 'Move someone forward', 'drag a card to another column, or open it and pick a stage.'],
   [
     'webhook',
@@ -488,13 +492,18 @@ const ACTIONS = {
   'candidate.created': () => 'Candidate added',
   'candidate.updated': () => 'Candidate details changed',
   'candidate.erased': (e) =>
-    `Candidate erased with ${plural(e.metadata.applications_deleted, 'application')} and ${plural(e.metadata.resumes_deleted, 'file')}`,
+    `Candidate erased with ${plural(e.metadata.applications_deleted, 'application')}, ${plural(e.metadata.resumes_deleted, 'résumé')} and ${plural(e.metadata.projects_deleted ?? 0, 'project')}`,
   'application.created': () => 'New application',
   'application.stage_changed': (e) =>
     `Application moved from ${STAGE_LABEL[e.metadata.from]} to ${STAGE_LABEL[e.metadata.to]}`,
   'resume.uploaded': () => 'Résumé uploaded',
   'resume.downloaded': () => 'Résumé opened (private 5-minute link)',
   'resume.deleted': () => 'Résumé deleted',
+  'project.added': () => 'Project added',
+  'project.updated': () => 'Project changed',
+  'project.file_uploaded': () => 'Project file uploaded',
+  'project.file_downloaded': () => 'Project file opened (private 5-minute link)',
+  'project.deleted': () => 'Project removed',
   'webhook.created': () => 'Webhook endpoint added',
   'webhook.updated': () => 'Webhook endpoint changed',
   'webhook.deleted': () => 'Webhook endpoint removed',
@@ -619,10 +628,11 @@ async function openDrawer(id, { push = true } = {}) {
   drawer.querySelector('button').focus();
 
   try {
-    const [candidate, history, resumes] = await Promise.all([
+    const [candidate, history, resumes, projects] = await Promise.all([
       api(`/v1/candidates/${app.candidate_id}`),
       api(`/v1/applications/${id}/history`),
       api(`/v1/candidates/${app.candidate_id}/resumes`),
+      api(`/v1/candidates/${app.candidate_id}/projects`),
     ]);
     if (state.selected !== id) return;
     const current = state.apps.find((a) => a.id === id) || app;
@@ -646,6 +656,8 @@ async function openDrawer(id, { push = true } = {}) {
           h('dd', { class: 'mono' }, candidate.phone || '—'),
           h('dt', {}, 'Location'),
           h('dd', {}, candidate.location || '—'),
+          h('dt', {}, 'GitHub'),
+          h('dd', {}, githubControl(candidate, id)),
           h('dt', {}, 'Source'),
           h('dd', {}, (candidate.source || '—').replace(/_/g, ' ')),
           h('dt', {}, 'Applied'),
@@ -691,13 +703,19 @@ async function openDrawer(id, { push = true } = {}) {
           'div',
           { class: 'moves' },
           resumes.data.map((r) =>
-            h('button', { class: 'btn small', type: 'button', onclick: () => openResume(r.id) }, `Open ${r.file_name}`),
+            h(
+              'button',
+              { class: 'btn small', type: 'button', onclick: () => openDownload(`/v1/resumes/${r.id}/download`) },
+              `Open ${r.file_name}`,
+            ),
           ),
           resumeUploader(candidate.id, id),
         ),
         ...(resumes.data.length
           ? []
           : [h('p', { class: 'muted' }, 'None yet. Upload a PDF or Word file, up to 1 MB in a sandbox.')]),
+        h('div', { class: 'section-title' }, 'Projects'),
+        projectList(candidate, projects.data, id),
         h('div', { class: 'section-title' }, 'Stage history'),
         h(
           'ol',
@@ -735,12 +753,12 @@ async function openDrawer(id, { push = true } = {}) {
   }
 }
 
-async function openResume(id) {
+async function openDownload(path) {
   // Open the tab first so pop-up blockers allow it, then point it at the private link.
   const tab = window.open('about:blank', '_blank');
   if (tab) tab.opener = null;
   try {
-    const link = await api(`/v1/resumes/${id}/download`);
+    const link = await api(path);
     if (tab) tab.location = link.url;
     else location.href = link.url;
     setTimeout(loadActivity, 500);
@@ -756,11 +774,15 @@ const SANDBOX_RESUME_BYTES = 1024 * 1024;
 
 async function uploadResume(candidateId, file) {
   if (file.size > SANDBOX_RESUME_BYTES) throw new ApiError(413, { detail: 'Sandbox résumés can be up to 1 MB.' });
+  return uploadFile(`/v1/candidates/${candidateId}/resumes`, file);
+}
+
+async function uploadFile(path, file) {
   const form = new FormData();
   form.append('file', file);
   let res;
   try {
-    res = await fetch(`/v1/candidates/${candidateId}/resumes`, {
+    res = await fetch(path, {
       method: 'POST',
       headers: { Authorization: `Bearer ${state.sandbox.api_key}` },
       body: form,
@@ -801,6 +823,275 @@ function resumeUploader(candidateId, appId) {
   return [input, btn];
 }
 
+// GitHub links: accept a pasted link, "github.com/name" or just "name", and send
+// the server the full https form. The server checks the shape again.
+const GH_PROFILE = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/;
+const GH_REPO = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9._-]{1,100}(?:\/\S*)?$/;
+/** '' when empty, null when it isn't a GitHub link of that kind, else the full link. */
+function githubUrl(value, pattern) {
+  const rest = value
+    .trim()
+    .replace(/^(?:https?:\/\/)?(?:www\.)?github\.com\//i, '')
+    .replace(/\/+$/, '');
+  if (!rest) return '';
+  return pattern.test(rest) ? `https://github.com/${rest}` : null;
+}
+
+// Links typed in by strangers only ever open in a new tab, and only if they are web links.
+function extLink(href, text, cls = 'btn small') {
+  if (!/^https?:\/\//i.test(href || '')) return null;
+  return h(
+    'a',
+    { class: cls, href, target: '_blank', rel: 'noopener noreferrer' },
+    text,
+    h('span', { 'aria-hidden': 'true' }, ' ↗'),
+  );
+}
+
+function githubControl(candidate, appId) {
+  const box = h('span', { class: 'gh' });
+  const show = () =>
+    box.replaceChildren(
+      candidate.github_url
+        ? extLink(candidate.github_url, candidate.github_url.replace(/^https:\/\//, ''), 'link')
+        : h('button', { class: 'btn small', type: 'button', onclick: edit }, 'Add GitHub profile'),
+    );
+  const edit = () => {
+    const input = h('input', {
+      class: 'field full',
+      type: 'text',
+      maxlength: '500',
+      autocomplete: 'off',
+      placeholder: 'github.com/username',
+      'aria-label': 'GitHub profile link',
+    });
+    const save = h('button', { class: 'btn small primary', type: 'submit' }, 'Save');
+    const form = h(
+      'form',
+      { class: 'inline-form', novalidate: true },
+      input,
+      h('div', { class: 'moves' }, save, h('button', { class: 'btn small', type: 'button', onclick: show }, 'Cancel')),
+    );
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const url = githubUrl(input.value, GH_PROFILE);
+      if (!url) {
+        input.setAttribute('aria-invalid', 'true');
+        toast('Enter a GitHub profile link, like github.com/username.', 'error');
+        return input.focus();
+      }
+      save.disabled = true;
+      try {
+        await api(`/v1/candidates/${candidate.id}`, { method: 'PATCH', body: { github_url: url } });
+        toast('GitHub profile saved.');
+        setTimeout(loadActivity, 300);
+        if (state.selected === appId) openDrawer(appId, { push: false });
+      } catch (err) {
+        toast(err.message, 'error');
+        save.disabled = false;
+      }
+    });
+    box.replaceChildren(form);
+    input.focus();
+  };
+  show();
+  return box;
+}
+
+const PROJECT_TYPES = '.zip,.pdf,.png,.jpg,.jpeg,application/zip,application/pdf,image/png,image/jpeg';
+const SANDBOX_PROJECT_BYTES = 2 * 1024 * 1024;
+
+async function uploadProjectFile(projectId, file) {
+  if (file.size > SANDBOX_PROJECT_BYTES)
+    throw new ApiError(413, { detail: 'Sandbox project files can be up to 2 MB. Link bigger projects on GitHub.' });
+  return uploadFile(`/v1/projects/${projectId}/file`, file);
+}
+
+const fileSize = (n) =>
+  n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`;
+
+// A candidate's projects: what they built, where the code is, and any file they sent.
+function projectList(candidate, projects, appId) {
+  const box = h('div', { class: 'projects' });
+  const refresh = () => {
+    setTimeout(loadActivity, 300);
+    if (state.selected === appId) openDrawer(appId, { push: false });
+  };
+  const card = (p) => {
+    const remove = h('button', { class: 'btn small ghost danger-outline', type: 'button' }, 'Remove');
+    remove.addEventListener('click', async () => {
+      if (!remove.dataset.armed) {
+        remove.dataset.armed = '1';
+        remove.textContent = 'Click again to remove';
+        return;
+      }
+      remove.disabled = true;
+      try {
+        await api(`/v1/projects/${p.id}`, { method: 'DELETE' });
+        toast(`${p.title} removed, with its file.`);
+        refresh();
+      } catch (err) {
+        toast(err.message, 'error');
+        remove.disabled = false;
+      }
+    });
+    return h(
+      'article',
+      { class: 'project' },
+      h('h3', {}, p.title),
+      p.description ? h('p', { class: 'project-desc' }, p.description) : null,
+      p.repo_url ? h('div', { class: 'project-repo mono' }, p.repo_url.replace(/^https:\/\/github\.com\//, '')) : null,
+      h(
+        'div',
+        { class: 'moves' },
+        extLink(p.repo_url, 'View code on GitHub'),
+        extLink(p.live_url, 'Live site'),
+        p.file
+          ? h(
+              'button',
+              { class: 'btn small', type: 'button', onclick: () => openDownload(`/v1/projects/${p.id}/download`) },
+              `Open ${p.file.file_name} (${fileSize(p.file.size_bytes)})`,
+            )
+          : null,
+        remove,
+      ),
+    );
+  };
+  const addBtn = h('button', { class: 'btn small', type: 'button', onclick: () => openForm() }, 'Add a project');
+  const openForm = () => {
+    const fields = projectFields();
+    const save = h('button', { class: 'btn small primary', type: 'submit' }, 'Save project');
+    const form = h(
+      'form',
+      { class: 'inline-form', novalidate: true },
+      fields.rows,
+      h('div', { class: 'moves' }, save, h('button', { class: 'btn small', type: 'button', onclick: draw }, 'Cancel')),
+    );
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const read = fields.read();
+      if (read.error) {
+        toast(read.error, 'error');
+        return read.focus?.focus();
+      }
+      if (!read.project) {
+        toast('Give the project a name and a GitHub link, a live link or a file.', 'error');
+        return fields.title.focus();
+      }
+      save.disabled = true;
+      save.textContent = 'Saving…';
+      const problem = await addProject(candidate.id, read.project, read.file);
+      toast(problem || `${read.project.title} added.`, problem ? 'error' : '');
+      refresh();
+    });
+    box.replaceChildren(...list(), form);
+    fields.title.focus();
+  };
+  const list = () =>
+    projects.length
+      ? projects.map(card)
+      : [
+          h(
+            'p',
+            { class: 'muted' },
+            'None yet. Add their GitHub repository, a live link or a ZIP of the code, so you can judge real work.',
+          ),
+        ];
+  const draw = () => box.replaceChildren(...list(), h('div', { class: 'moves' }, addBtn));
+  draw();
+  return box;
+}
+
+// The project inputs, shared by the drawer and the "Add a candidate" form.
+function projectFields() {
+  const row = (label, input, hint) =>
+    h(
+      'label',
+      { class: 'form-row' },
+      h('span', { class: 'form-label' }, label),
+      input,
+      hint ? h('span', { class: 'form-hint' }, hint) : null,
+    );
+  const title = h('input', {
+    class: 'field full',
+    name: 'project_title',
+    type: 'text',
+    maxlength: '200',
+    autocomplete: 'off',
+  });
+  const repo = h('input', {
+    class: 'field full',
+    name: 'project_repo',
+    type: 'text',
+    maxlength: '500',
+    autocomplete: 'off',
+    placeholder: 'github.com/username/project',
+  });
+  const live = h('input', {
+    class: 'field full',
+    name: 'project_live',
+    type: 'url',
+    maxlength: '500',
+    placeholder: 'https://',
+  });
+  const desc = h('textarea', { class: 'field full', name: 'project_description', maxlength: '2000', rows: '2' });
+  const file = h('input', { class: 'field full file', name: 'project_file', type: 'file', accept: PROJECT_TYPES });
+  return {
+    title,
+    repo,
+    rows: [
+      row('Project name', title),
+      row('GitHub repository', repo, 'Where the code is. The hiring team can read it there.'),
+      row('Live link (optional)', live),
+      row('What it is (optional)', desc),
+      row('Project file (optional)', file, 'A ZIP of the code, a PDF or a screenshot, up to 2 MB here.'),
+    ],
+    /** { project, file } when filled in, {} when left empty, { error, focus } when something is wrong. */
+    read() {
+      for (const el of [title, repo, live, file]) el.removeAttribute('aria-invalid');
+      const f = file.files?.[0];
+      const anything = title.value.trim() || repo.value.trim() || live.value.trim() || desc.value.trim() || f;
+      if (!anything) return {};
+      const repoUrl = githubUrl(repo.value, GH_REPO);
+      const fail = (el, error) => (el.setAttribute('aria-invalid', 'true'), { error, focus: el });
+      if (!title.value.trim()) return fail(title, 'Give the project a name.');
+      if (repoUrl === null) return fail(repo, 'Use a GitHub repository link, like github.com/username/project.');
+      if (live.value.trim() && !/^https?:\/\/[^\s.]+\.[^\s]+$/i.test(live.value.trim()))
+        return fail(live, 'Use a full web link for the live site, starting with https://.');
+      if (!repoUrl && !live.value.trim() && !f)
+        return fail(repo, 'Add a GitHub link, a live link or a file for the project.');
+      if (f && f.size > SANDBOX_PROJECT_BYTES)
+        return fail(file, 'That project file is over 2 MB, the sandbox limit. Link the code on GitHub instead.');
+      return {
+        project: {
+          title: title.value.trim(),
+          ...(repoUrl ? { repo_url: repoUrl } : {}),
+          ...(live.value.trim() ? { live_url: live.value.trim() } : {}),
+          ...(desc.value.trim() ? { description: desc.value.trim() } : {}),
+        },
+        file: f,
+      };
+    },
+  };
+}
+
+/** Adds a project and its file. Returns '' when it all worked, or what went wrong. */
+async function addProject(candidateId, project, file) {
+  let created;
+  try {
+    created = await api(`/v1/candidates/${candidateId}/projects`, { method: 'POST', body: project });
+  } catch (err) {
+    return `The project wasn't saved: ${err.message}`;
+  }
+  if (!file) return '';
+  try {
+    await uploadProjectFile(created.id, file);
+    return '';
+  } catch (err) {
+    return `${project.title} was saved, but its file wasn't: ${err.message}`;
+  }
+}
+
 // Erasure takes two clicks: the first explains what goes, the second does it.
 function eraseControl(candidate) {
   const name = `${candidate.first_name} ${candidate.last_name}`;
@@ -812,7 +1103,11 @@ function eraseControl(candidate) {
     );
   const ask = () => {
     box.replaceChildren(
-      h('p', {}, `Erase ${name}? Every application they made and their résumé files go too. This can't be undone.`),
+      h(
+        'p',
+        {},
+        `Erase ${name}? Every application they made, their résumés and their projects go too. This can't be undone.`,
+      ),
       h(
         'div',
         { class: 'moves' },
@@ -865,6 +1160,7 @@ const FIELD_LABEL = {
   'candidate.first_name': 'First name',
   'candidate.last_name': 'Last name',
   'candidate.email': 'Email',
+  'candidate.github_url': 'GitHub profile',
   note: 'Note',
 };
 
@@ -904,6 +1200,8 @@ function openAddForm() {
     SOURCES.map(([v, l]) => h('option', { value: v }, l)),
   );
   const file = h('input', { class: 'field full file', name: 'resume', type: 'file', accept: RESUME_TYPES });
+  const github = text('github_url', { maxlength: '500', placeholder: 'github.com/username' });
+  const project = projectFields();
   const note = h('textarea', { class: 'field full', name: 'note', maxlength: '1000', rows: '2' });
   const errors = h('div', { class: 'form-errors', role: 'alert', hidden: true });
   const submit = h('button', { class: 'btn primary', type: 'submit' }, 'Add application');
@@ -925,11 +1223,18 @@ function openAddForm() {
       row('Job', job),
       row('Where they came from', source),
       row('Résumé (optional)', file, 'PDF or Word, up to 1 MB here. It is stored privately.'),
+      row('GitHub profile (optional)', github, 'So the hiring team can see the code they write.'),
+      h('fieldset', { class: 'fieldset' }, h('legend', {}, 'A project they built (optional)'), project.rows),
       row('Note (optional)', note),
       errors,
       h('div', { class: 'moves' }, submit),
     );
-    const fields = { 'candidate.first_name': first, 'candidate.last_name': last, 'candidate.email': email };
+    const fields = {
+      'candidate.first_name': first,
+      'candidate.last_name': last,
+      'candidate.email': email,
+      'candidate.github_url': github,
+    };
     const showErrors = (title, items) => {
       for (const el of Object.values(fields)) el.removeAttribute('aria-invalid');
       for (const [path] of items) fields[path]?.setAttribute('aria-invalid', 'true');
@@ -964,9 +1269,18 @@ function openAddForm() {
       if (!candidate.last_name) missing.push(['candidate.last_name', 'Enter a last name.']);
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidate.email))
         missing.push(['candidate.email', 'Enter a valid email address, like name@company.com.']);
+      const githubValue = githubUrl(github.value, GH_PROFILE);
+      if (githubValue === null)
+        missing.push(['candidate.github_url', 'Use a GitHub profile link, like github.com/username.']);
+      else if (githubValue) candidate.github_url = githubValue;
       if (missing.length) return showErrors('Please fix these before adding the application:', missing);
       if (resume && resume.size > SANDBOX_RESUME_BYTES)
         return showErrors('That résumé is over 1 MB, the sandbox limit. Try a smaller file.', []);
+      const work = project.read();
+      if (work.error) {
+        showErrors(work.error, []);
+        return work.focus.focus();
+      }
       submit.disabled = true;
       submit.textContent = 'Adding…';
       try {
@@ -981,6 +1295,10 @@ function openAddForm() {
           } catch (err) {
             problem = ` The résumé wasn't stored: ${err.message}`;
           }
+        }
+        if (work.project) {
+          const p = await addProject(app.candidate_id, work.project, work.file);
+          if (p) problem += ` ${p}`;
         }
         guide.tick('add');
         state.filters = { job: '', q: '' };
