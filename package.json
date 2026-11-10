@@ -24,9 +24,9 @@
   "dependencies": {
     "@hono/node-server": "^2.1.6",
     "@hono/zod-openapi": "^1.6.3",
-    "@vercel/functions": "^3.10.6",
+    "@vercel/functions": "^3.11.0",
     "botid": "1.5.12",
-    "hono": "^4.13.16",
+    "hono": "^4.13.17",
     "jose": "^6.2.15",
     "postgres": "^3.4.9",
     "zod": "^4.6.7"
