@@ -22,12 +22,12 @@
   },
   "license": "UNLICENSED",
   "dependencies": {
-    "@hono/node-server": "^2.1.6",
+    "@hono/node-server": "^2.1.8",
     "@hono/zod-openapi": "^1.6.3",
-    "@vercel/functions": "^3.10.6",
-    "botid": "1.5.12",
-    "hono": "^4.13.16",
-    "jose": "^6.2.15",
+    "@vercel/functions": "^3.11.3",
+    "botid": "1.5.13",
+    "hono": "^4.13.18",
+    "jose": "^6.2.17",
     "postgres": "^3.4.9",
     "zod": "^4.6.7"
   },
@@ -35,7 +35,7 @@
     "@types/node": "^22.20.5",
     "embedded-postgres": "^17.11.0-beta.19",
     "esbuild": "0.28.2",
-    "prettier": "^3.9.10",
+    "prettier": "^3.10.1",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vitest": "^5.1.0"
